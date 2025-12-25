@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wolni Farmerzy Bot - Logowanie</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-page">
+  <div class="login-container">
+    <div class="login-box">
+      <h1>🌾 Wolni Farmerzy Bot</h1>
+      <p class="subtitle">Panel zarządzania automatyzacją</p>
+      
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Logowanie</button>
+        <button class="tab" data-tab="register">Rejestracja</button>
+      </div>
+      
+      <form id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label for="username">Login</label>
+          <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Hasło</label>
+          <input type="password" id="password" name="password" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Zaloguj się</button>
+      </form>
+      
+      <form id="registerForm" class="auth-form hidden">
+        <div class="form-group">
+          <label for="regUsername">Login</label>
+          <input type="text" id="regUsername" name="username" required>
+        </div>
+        <div class="form-group">
+          <label for="regPassword">Hasło (min. 6 znaków)</label>
+          <input type="password" id="regPassword" name="password" required minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="regPassword2">Powtórz hasło</label>
+          <input type="password" id="regPassword2" name="password2" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Zarejestruj się</button>
+      </form>
+      
+      <div id="message" class="message hidden"></div>
+    </div>
+  </div>
+  
+  <script>
+    // Przełączanie między zakładkami
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        const tabName = tab.dataset.tab;
+        document.getElementById('loginForm').classList.toggle('hidden', tabName !== 'login');
+        document.getElementById('registerForm').classList.toggle('hidden', tabName !== 'register');
+      });
+    });
+    
+    // Pokaż wiadomość
+    function showMessage(text, isError = false) {
+      const msg = document.getElementById('message');
+      msg.textContent = text;
+      msg.className = `message ${isError ? 'error' : 'success'}`;
+      msg.classList.remove('hidden');
+    }
+    
+    // Logowanie
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          window.location.href = '/dashboard';
+        } else {
+          showMessage(data.error, true);
+        }
+      } catch (error) {
+        showMessage('Błąd połączenia', true);
+      }
+    });
+    
+    // Rejestracja
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const password = document.getElementById('regPassword').value;
+      const password2 = document.getElementById('regPassword2').value;
+      
+      if (password !== password2) {
+        showMessage('Hasła nie są identyczne', true);
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('regUsername').value,
+            password: password
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          window.location.href = '/dashboard';
+        } else {
+          showMessage(data.error, true);
+        }
+      } catch (error) {
+        showMessage('Błąd połączenia', true);
+      }
+    });
+  </script>
+</body>
+</html>

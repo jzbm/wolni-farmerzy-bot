@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wolni Farmerzy Bot - Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">🌾 Wolni Farmerzy Bot</div>
+    <div class="nav-user">
+      <span id="userName"></span>
+      <button onclick="logout()" class="btn btn-small">Wyloguj</button>
+    </div>
+  </nav>
+  
+  <div class="container">
+    <aside class="sidebar">
+      <h3>Konta gry</h3>
+      <div id="accountsList" class="accounts-list">
+        <!-- Konta zostaną załadowane dynamicznie -->
+      </div>
+      <button onclick="showAddAccountModal()" class="btn btn-secondary btn-full">
+        + Dodaj konto
+      </button>
+      
+      <div class="sidebar-section">
+        <h4>Status schedulera</h4>
+        <div id="schedulerStatus" class="status-box">
+          <span class="status-indicator"></span>
+          <span class="status-text">Ładowanie...</span>
+        </div>
+      </div>
+    </aside>
+    
+    <main class="main-content">
+      <div id="welcomeScreen" class="welcome-screen">
+        <h2>Witaj w panelu bota!</h2>
+        <p>Wybierz konto z listy po lewej stronie lub dodaj nowe.</p>
+        <div class="quick-stats">
+          <div class="stat-card">
+            <span class="stat-number" id="totalAccounts">0</span>
+            <span class="stat-label">Kont</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="activeAutomations">0</span>
+            <span class="stat-label">Aktywnych automatyzacji</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="accountDetails" class="account-details hidden">
+        <div class="account-header">
+          <h2 id="accountEmail">-</h2>
+          <div class="account-actions">
+            <button onclick="testLogin()" class="btn btn-secondary btn-small">Test logowania</button>
+            <button onclick="toggleAutomation()" id="automationBtn" class="btn btn-success btn-small">
+              Auto
+            </button>
+          </div>
+        </div>
+        
+        <!-- Przyciski modułów -->
+        <div class="module-actions">
+          <button onclick="runFarm()" class="btn btn-module btn-farm" title="Uruchom moduł farmy">
+            🌾 Farma
+          </button>
+          <button onclick="runForestry()" class="btn btn-module btn-forestry" title="Uruchom moduł tartaku">
+            🌲 Tartak
+          </button>
+          <button onclick="runStalls()" class="btn btn-module btn-stalls" title="Uruchom moduł straganów">
+            🏪 Stragany
+          </button>
+          <button onclick="runCycle()" class="btn btn-module btn-cycle" title="Uruchom wszystkie moduły">
+            🔄 Pełny cykl
+          </button>
+        </div>
+        
+        <!-- Status wykonania -->
+        <div id="moduleStatus" class="module-status hidden">
+          <div class="status-icon">⏳</div>
+          <div class="status-text">Wykonywanie...</div>
+        </div>
+        
+        <div class="tabs-container">
+          <div class="tabs">
+            <button class="tab active" data-tab="overview">Przegląd</button>
+            <button class="tab" data-tab="fields">Pola</button>
+            <button class="tab" data-tab="settings">Ustawienia</button>
+            <button class="tab" data-tab="logs">Logi</button>
+          </div>
+        </div>
+        
+        <!-- Przegląd -->
+        <div id="tab-overview" class="tab-content active">
+          <!-- Nadchodzące zbiory na żywo -->
+          <div class="section live-tracking">
+            <h3>⏱️ Nadchodzące zbiory</h3>
+            <div id="liveHarvests" class="live-harvests-grid">
+              <p class="no-data">Uruchom cykl aby zobaczyć status pól</p>
+            </div>
+          </div>
+          
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-number" id="statTotalActions">0</span>
+              <span class="stat-label">Wszystkich akcji</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number" id="statSuccessRate">0%</span>
+              <span class="stat-label">Skuteczność</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number" id="statPendingTasks">0</span>
+              <span class="stat-label">Oczekujących zadań</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number" id="statLastLogin">-</span>
+              <span class="stat-label">Ostatnie logowanie</span>
+            </div>
+          </div>
+          
+          <div class="section">
+            <h3>🌱 Nadchodzące zbiory</h3>
+            <div id="upcomingHarvests" class="harvests-list">
+              <p class="no-data">Brak danych</p>
+            </div>
+          </div>
+          
+          <div class="section">
+            <h3>📊 Akcje wg typu</h3>
+            <div id="actionsByType" class="actions-chart">
+              <p class="no-data">Brak danych</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Pola -->
+        <div id="tab-fields" class="tab-content hidden">
+          <div class="fields-header">
+            <h3>🌾 Farma</h3>
+            <button onclick="loadFields('farm')" class="btn btn-small">Odśwież</button>
+          </div>
+          <div id="farmFields" class="fields-grid">
+            <p class="no-data">Brak danych - uruchom cykl aby przeskanować pola</p>
+          </div>
+          
+          <div class="fields-header">
+            <h3>🌲 Tartak</h3>
+            <button onclick="loadFields('sawmill')" class="btn btn-small">Odśwież</button>
+          </div>
+          <div id="sawmillFields" class="fields-grid">
+            <p class="no-data">Brak danych</p>
+          </div>
+        </div>
+        
+        <!-- Ustawienia -->
+        <div id="tab-settings" class="tab-content hidden">
+          <form id="settingsForm" class="settings-form">
+            
+            <!-- USTAWIENIA OGÓLNE -->
+            <div class="settings-section">
+              <h3>⚙️ Ustawienia ogólne</h3>
+              <div class="form-group">
+                <label for="checkInterval">Interwał sprawdzania (minuty)</label>
+                <input type="number" id="checkInterval" name="check_interval_minutes" min="1" max="60" value="5">
+              </div>
+            </div>
+            
+            <!-- FARMA -->
+            <div class="settings-section">
+              <h3>🌾 Farma</h3>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="farmEnabled" name="farm_enabled">
+                  <span><strong>Włącz moduł farmy</strong></span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="farmAutoHarvest" name="farm_auto_harvest">
+                  <span>Automatyczne zbieranie plonów</span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="farmAutoPlant" name="farm_auto_plant">
+                  <span>Automatyczne sadzenie</span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="farmAutoWater" name="farm_auto_water">
+                  <span>Automatyczne podlewanie</span>
+                </label>
+              </div>
+              
+              <div class="form-group">
+                <label for="farmPreferredPlants">Preferowane rośliny</label>
+                <select id="farmPreferredPlants" name="farm_preferred_plants" multiple>
+                  <option value="pszenica">Pszenica</option>
+                  <option value="kukurydza">Kukurydza</option>
+                  <option value="marchew">Marchew</option>
+                  <option value="ziemniak">Ziemniak</option>
+                  <option value="truskawka">Truskawka</option>
+                  <option value="pomidor">Pomidor</option>
+                  <option value="salata">Sałata</option>
+                  <option value="cebula">Cebula</option>
+                  <option value="dynia">Dynia</option>
+                  <option value="slonecznik">Słonecznik</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- STRAGANY -->
+            <div class="settings-section">
+              <h3>🏪 Stragany</h3>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="stallsEnabled" name="stalls_enabled">
+                  <span><strong>Włącz moduł straganów</strong></span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="stallsAutoRestock" name="stalls_auto_restock">
+                  <span>Automatyczne uzupełnianie straganów</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- TARTAK -->
+            <div class="settings-section">
+              <h3>🌲 Tartak</h3>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="forestryEnabled" name="forestry_enabled">
+                  <span><strong>Włącz moduł tartaku</strong></span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="forestryAutoHarvest" name="forestry_auto_harvest">
+                  <span>Automatyczne zbieranie drzew</span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="forestryAutoPlant" name="forestry_auto_plant">
+                  <span>Automatyczne sadzenie drzew</span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="forestryAutoWater" name="forestry_auto_water">
+                  <span>Automatyczne podlewanie drzew</span>
+                </label>
+              </div>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="forestryAutoProduction" name="forestry_auto_production">
+                  <span>Automatyczna produkcja (Tartak/Stolarnia)</span>
+                </label>
+              </div>
+              
+              <div class="form-group">
+                <label for="forestryPreferredTree">Preferowane drzewo</label>
+                <select id="forestryPreferredTree" name="forestry_preferred_tree">
+                  <option value="topola">Topola (8h)</option>
+                  <option value="swierk" selected>Świerk (10h)</option>
+                  <option value="brzoza">Brzoza (16h)</option>
+                  <option value="buk">Buk (36h)</option>
+                  <option value="kasztan">Kasztan</option>
+                  <option value="dab">Dąb</option>
+                  <option value="jesion">Jesion</option>
+                  <option value="klon">Klon</option>
+                  <option value="wierzba">Wierzba</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- PIKNIK (TODO) -->
+            <div class="settings-section">
+              <h3>🧺 Piknik <span class="badge">TODO</span></h3>
+              
+              <div class="form-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="picnicEnabled" name="picnic_enabled" disabled>
+                  <span><strong>Włącz moduł pikniku</strong> (w przygotowaniu)</span>
+                </label>
+              </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">💾 Zapisz ustawienia</button>
+          </form>
+        </div>
+        
+        <!-- Logi -->
+        <div id="tab-logs" class="tab-content hidden">
+          <div class="logs-header">
+            <h3>📜 Historia akcji</h3>
+            <button onclick="loadLogs()" class="btn btn-small">Odśwież</button>
+          </div>
+          <div id="logsList" class="logs-list">
+            <p class="no-data">Brak logów</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Modal dodawania konta -->
+  <div id="addAccountModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Dodaj konto gry</h3>
+        <button onclick="closeModal()" class="modal-close">&times;</button>
+      </div>
+      <form id="addAccountForm">
+        <div class="form-group">
+          <label for="gameEmail">Email / Login do gry</label>
+          <input type="text" id="gameEmail" name="email" required>
+        </div>
+        <div class="form-group">
+          <label for="gamePassword">Hasło do gry</label>
+          <input type="password" id="gamePassword" name="password" required>
+        </div>
+        <div class="form-group">
+          <label for="gameServer">Serwer</label>
+          <select id="gameServer" name="server">
+            <option value="1">Serwer 1</option>
+            <option value="2">Serwer 2</option>
+            <option value="3">Serwer 3</option>
+            <option value="4">Serwer 4</option>
+            <option value="5">Serwer 5</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" onclick="closeModal()" class="btn btn-secondary">Anuluj</button>
+          <button type="submit" class="btn btn-primary">Dodaj konto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Toast notifications -->
+  <div id="toastContainer" class="toast-container"></div>
+  
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

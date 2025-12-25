@@ -1,0 +1,32 @@
+{
+  "name": "wolni-farmerzy-bot",
+  "version": "1.0.0",
+  "description": "Bot automatyzujący czynności w grze Wolni Farmerzy",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "analyze": "node src/tools/analyzer.js",
+    "web": "node src/web/server.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "express": "^4.18.2",
+    "better-sqlite3": "^9.2.2",
+    "node-cron": "^3.0.3",
+    "winston": "^3.11.0",
+    "dotenv": "^16.3.1",
+    "bcryptjs": "^2.4.3",
+    "express-session": "^1.17.3",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "",
+  "license": "MIT"
+}
