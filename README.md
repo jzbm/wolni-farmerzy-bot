@@ -203,3 +203,4 @@ I zaktualizuj selektory w `src/config.js`.
 ## 📄 Licencja
 
 MIT License - używaj dowolnie, ale na własną odpowiedzialność.
+# wolni-farmerzy-bot
