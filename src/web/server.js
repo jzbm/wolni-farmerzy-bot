@@ -24,7 +24,11 @@ import {
   getAccountStats,
   getPendingTasks,
   getStallSlotConfig,
-  updateStallSlotConfig
+  updateStallSlotConfig,
+  getForestryBuildingConfig,
+  updateForestryBuildingConfig,
+  getFarmConfig,
+  updateFarmConfig
 } from '../database.js';
 import { scheduler } from '../scheduler.js';
 import { browserManager } from '../browser.js';
@@ -259,14 +263,13 @@ app.post('/api/accounts/:id/run-farm', requireAuth, async (req, res) => {
     
     const { FarmModule } = await import('../modules/farm.js');
     const farm = new FarmModule(session, account);
-    const preferredPlants = JSON.parse(account.farm_preferred_plants || '["zboze"]');
     
+    // cropType = null -> fullFarmCycle pobierze konfigurację per farma z bazy danych
     const results = await farm.fullFarmCycle({
       farms: [1, 2, 3, 4],
       harvest: true,
       plant: true,
       water: account.farm_auto_water,
-      cropType: preferredPlants[0] || 'zboze',
     });
     
     // Zamknij przeglądarkę
@@ -310,6 +313,25 @@ app.post('/api/accounts/:id/run-forestry', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Konto nie znalezione' });
     }
     
+    // Pobierz konfigurację tartaku
+    const buildingConfigStr = getForestryBuildingConfig(id);
+    const buildingConfig = buildingConfigStr ? JSON.parse(buildingConfigStr) : null;
+    
+    // Mapuj nazwę drzewa na ID
+    const treeNameToId = {
+      'swierk': 1, 'świerk': 1,
+      'brzoza': 2,
+      'buk': 3,
+      'topola': 4,
+      'kasztan': 5,
+      'dab': 7, 'dąb': 7,
+      'jesion': 8,
+      'klon': 9,
+      'wierzba': 10,
+    };
+    const preferredTreeName = account.forestry_preferred_tree || 'swierk';
+    const preferredTreeId = treeNameToId[preferredTreeName.toLowerCase()] || 1;
+    
     // Uruchom cykl tartaku
     const session = await browserManager.getSession(account.email);
     const auth = new GameAuth(session, account);
@@ -322,12 +344,12 @@ app.post('/api/accounts/:id/run-forestry', requireAuth, async (req, res) => {
     
     const forestry = new ForestryModule(session, account);
     const results = await forestry.fullForestryCycle({
-      harvestTrees: true,
-      plantTrees: true,
-      waterTrees: true,
-      preferredTreeType: account.forestry_preferred_tree || 'swierk',
-      startProduction: true,
-      productionBuildings: [1, 2],
+      harvestTrees: account.forestry_auto_harvest !== false,
+      plantTrees: account.forestry_auto_plant !== false,
+      waterTrees: account.forestry_auto_water !== false,
+      preferredTreeId: preferredTreeId,
+      manageBuildings: account.forestry_auto_production !== false,
+      buildingConfig: buildingConfig,
     });
     
     // Zamknij przeglądarkę po zakończeniu
@@ -450,6 +472,91 @@ app.post('/api/accounts/:id/stalls-config', requireAuth, (req, res) => {
   }
 });
 
+// Pobierz konfigurację tartaku
+app.get('/api/accounts/:id/forestry-config', requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const account = getGameAccount(id);
+    
+    if (!account || account.app_user_id !== req.session.userId) {
+      return res.status(404).json({ error: 'Konto nie znalezione' });
+    }
+    
+    const configStr = getForestryBuildingConfig(id);
+    const config = configStr ? JSON.parse(configStr) : null;
+    const preferredTree = account.forestry_preferred_tree || 'swierk';
+    res.json({ config, preferredTree });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania konfiguracji tartaku' });
+  }
+});
+
+// Zapisz konfigurację tartaku
+app.post('/api/accounts/:id/forestry-config', requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { config, preferredTree } = req.body;
+    const account = getGameAccount(id);
+    
+    if (!account || account.app_user_id !== req.session.userId) {
+      return res.status(404).json({ error: 'Konto nie znalezione' });
+    }
+    
+    if (config) {
+      updateForestryBuildingConfig(id, config);
+    }
+    if (preferredTree) {
+      updateAutomationSettings(id, { forestry_preferred_tree: preferredTree });
+    }
+    res.json({ success: true, message: 'Konfiguracja tartaku zapisana' });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd zapisywania konfiguracji tartaku' });
+  }
+});
+
+// Pobierz konfigurację farmy (rośliny per farma)
+app.get('/api/accounts/:id/farm-config', requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const account = getGameAccount(id);
+    
+    if (!account || account.app_user_id !== req.session.userId) {
+      return res.status(404).json({ error: 'Konto nie znalezione' });
+    }
+    
+    const configStr = getFarmConfig(id);
+    const config = configStr ? JSON.parse(configStr) : {
+      farm1: 'zboze',
+      farm2: 'zboze',
+      farm3: 'zboze',
+      farm4: 'zboze'
+    };
+    res.json({ config });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania konfiguracji farmy' });
+  }
+});
+
+// Zapisz konfigurację farmy (rośliny per farma)
+app.post('/api/accounts/:id/farm-config', requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { config } = req.body;
+    const account = getGameAccount(id);
+    
+    if (!account || account.app_user_id !== req.session.userId) {
+      return res.status(404).json({ error: 'Konto nie znalezione' });
+    }
+    
+    if (config) {
+      updateFarmConfig(id, config);
+    }
+    res.json({ success: true, message: 'Konfiguracja farmy zapisana' });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd zapisywania konfiguracji farmy' });
+  }
+});
+
 // Pobierz live status gry (stragany, pola, budynki)
 app.get('/api/accounts/:id/game-status', requireAuth, async (req, res) => {
   try {
@@ -474,15 +581,22 @@ app.get('/api/accounts/:id/game-status', requireAuth, async (req, res) => {
     const stalls = new StallsModule(session, account);
     const stallsStatus = await stalls.getAllStallsStatus();
     
-    // Pobierz status pól z bazy
-    const fields = getFields(id);
+    // Pobierz live status pól z gry
+    const farm = new FarmModule(session, account);
+    const fieldsStatus = await farm.getAllFieldsStatus();
+    
+    // Pobierz status tartaku
+    const { ForestryModule } = await import('../modules/forestry.js');
+    const forestry = new ForestryModule(session, account);
+    const forestryStatus = await forestry.getForestryStatus();
     
     // Zamknij przeglądarkę
     await browserManager.closeSession(account.email);
     
     res.json({ 
       stallsStatus,
-      fields,
+      fieldsStatus,
+      forestryStatus,
       fetchedAt: new Date().toISOString()
     });
   } catch (error) {
@@ -547,6 +661,88 @@ app.get('/api/accounts/:id/logs', requireAuth, (req, res) => {
 app.get('/api/scheduler/status', requireAuth, (req, res) => {
   const status = scheduler.getStatus();
   res.json(status);
+});
+
+// Pobierz kolejkę zadań dla konta
+app.get('/api/scheduler/accounts/:id/queue', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const queue = scheduler.getAccountTaskQueue(parseInt(id));
+  res.json({ queue });
+});
+
+// Aktywuj konto z określonym trybem
+app.post('/api/scheduler/accounts/:id/activate', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { mode, intervalMinutes, windowStart, windowEnd, data } = req.body;
+  
+  try {
+    await scheduler.activateAccount(parseInt(id), {
+      mode: mode || 'interval',
+      intervalMinutes: intervalMinutes || 30,
+      windowStart: windowStart,
+      windowEnd: windowEnd,
+      data: data
+    });
+    res.json({ success: true, message: 'Konto aktywowane' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Harmonogramuj zadanie dzienne
+app.post('/api/scheduler/accounts/:id/daily', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { taskType, hour, minute, data } = req.body;
+  
+  try {
+    const taskId = scheduler.scheduleDailyTask(
+      parseInt(id), 
+      taskType, 
+      hour || 8, 
+      minute || 0, 
+      data || {}
+    );
+    res.json({ success: true, taskId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Harmonogramuj zadanie w oknie czasowym
+app.post('/api/scheduler/accounts/:id/window', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { taskType, windowStart, windowEnd, intervalMinutes, data } = req.body;
+  
+  try {
+    const taskId = scheduler.scheduleWindowTask(
+      parseInt(id), 
+      taskType, 
+      windowStart || '08:00',
+      windowEnd || '22:00',
+      (intervalMinutes || 30) * 60 * 1000,
+      data || {}
+    );
+    res.json({ success: true, taskId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Harmonogramuj łańcuch zadań
+app.post('/api/scheduler/accounts/:id/chain', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { tasks } = req.body;
+  
+  if (!tasks || !Array.isArray(tasks)) {
+    return res.status(400).json({ error: 'Wymagana tablica zadań' });
+  }
+  
+  try {
+    const taskId = scheduler.scheduleTaskChain(parseInt(id), tasks);
+    res.json({ success: true, taskId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ============ WEBSOCKET ============

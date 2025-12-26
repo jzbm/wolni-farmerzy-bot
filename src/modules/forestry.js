@@ -1,19 +1,41 @@
 /**
  * Moduł tartaku (Forestry) - obsługa drzew i produkcji drewna
  * Wolni Farmerzy - struktura:
- * - Nawigacja: #speedlink_forestry
- * - 25 pól z drzewami: #forestry_pos_status1 do #forestry_pos_status25
- * - Przyciski główne:
- *   - #forestry_forest_button1 - Podlej wszystkie (forestryWater())
- *   - #forestry_forest_button2 - Zbierz wszystkie (forestryAjaxAction('cropall'))
- *   - #forestry_forest_button3 - Nawoź (forestryFertilize())
- *   - #forestry_forest_button6 - Pomocnik w sadzeniu (forestryAutoplant())
- * - Wybór sadzonki: #forestry_stock1_select → #f_stock_item{1-10}
- * - 2 budynki produkcyjne:
- *   - Tartak (building 1): #forestry_building_click1
- *   - Stolarnia (building 2): #forestry_building_click2
  * 
- * Typy drzew (ID):
+ * NAWIGACJA:
+ * - Speedlink: #speedlink_forestry
+ * 
+ * DRZEWA (25 pól):
+ * - Pola: #forestry_pos1 do #forestry_pos25
+ * - Info po hover: #forestry_pos_info{num} (zawiera nazwę drzewa i czas)
+ * - Status: #forestry_pos_status{num}
+ * - Zbiór: klik na pole → popup jeśli nie gotowe (NIE) lub szkodnik (TAK + ponów)
+ * 
+ * SADZONKI:
+ * - Wybór: hover na #forestry_stock1_object → #forestry_stock1 (menu)
+ * - Elementy: #f_stock_item{1-10}
+ * - Ilość: #f_stock_amount_{id}
+ * - Po wyborze sadzonka jest aktywna - klikamy na pola żeby sadzić
+ * 
+ * PRZYCISKI GŁÓWNE:
+ * - #forestry_forest_button1 - Podlej wszystkie (forestryWater()) - raz na 24h
+ * - #forestry_forest_button2 - Zbierz wszystkie (forestryAjaxAction('cropall'))
+ * - #forestry_forest_button3 - Nawoź (forestryFertilize())
+ * - #forestry_forest_button6 - Pomocnik w sadzeniu (forestryAutoplant())
+ * 
+ * BUDYNKI PRODUKCYJNE:
+ * - Tartak (building 1): #forestry_building_click1
+ * - Stolarnia (building 2): #forestry_building_click2
+ * - 2 sloty każdy: #forestry_building_inner_slot_img_main{1,2}
+ * - Klik na gotowy slot = zbiór
+ * - Klik na pusty slot = menu wyboru produkcji #forestry_production_select
+ * - Produkty: .forestry_selectproduction_item z onclick="dialogForestry('startproduction', ...)"
+ * - Brak onclick lub klasa "important" = brak zasobów
+ * - coins.gif = wymaga monet premium - POMIJAMY
+ * - Nawigacja stron: #forestry_selectproduction_navi_next / _pre
+ * - Potwierdzenie: #globalbox_button1
+ * 
+ * TYPY DRZEW (ID):
  * 1=Świerk (10h), 2=Brzoza (16h), 3=Buk (36h), 4=Topola (8h),
  * 5=Kasztan, 7=Dąb, 8=Jesion, 9=Klon, 10=Wierzba
  */
@@ -39,7 +61,67 @@ export class ForestryModule {
       'klon': 9, 'maple': 9,
       'wierzba': 10, 'willow': 10,
     };
+    
+    // Nazwy drzew
+    this.treeNames = {
+      1: 'Świerk', 2: 'Brzoza', 3: 'Buk', 4: 'Topola',
+      5: 'Kasztan', 7: 'Dąb', 8: 'Jesion', 9: 'Klon', 10: 'Wierzba'
+    };
+    
+    // Produkty tartaku (building 1) - ID produktu => nazwa
+    this.sawmillProducts = {
+      41: 'Deski (Świerk posp.)',
+      42: 'Kantówki (Świerk posp.)',
+      43: 'Okrąglaki (Świerk posp.)',
+      44: 'Deski (Brzoza)',
+      45: 'Kantówki (Brzoza)',
+      46: 'Okrąglaki (Brzoza)',
+      47: 'Deski (Buk czerw.)',
+      48: 'Kantówki (Buk czerw.)',
+      49: 'Okrąglaki (Buk czerw.)',
+      50: 'Deski (Topola)',
+      51: 'Kantówki (Topola)',
+      52: 'Okrąglaki (Topola)',
+    };
+    
+    // Produkty stolarni (building 2) - ID produktu => nazwa
+    this.carpentryProducts = {
+      101: 'Drewniane ramy',
+      102: 'Drewniana balia',
+      103: 'Paśnik',
+      104: 'Drewniane grabie',
+      105: 'Konik na biegunach',
+      106: 'Chochla',
+      107: 'Miotła',
+      108: 'Parkiet',
+      109: 'Korytko',
+      111: 'Drewniaki',
+      112: 'Drewniana kolejka',
+      113: 'Dziadek do orzechów',
+      114: 'Świecznik bożonarodzeniowy',
+      133: 'Piramida bożonarodzeniowa',
+      200: 'Chwastownik',
+      201: 'Grabie',
+      202: 'Kompostownik',
+      203: 'Frezerka',
+      204: 'Zestaw czyszczący',
+      205: 'Komplet do masażu zwierząt',
+      206: 'Miseczka',
+      207: 'Dokarmiarka',
+      208: 'Mieszalnik',
+      209: 'Maszyna sortująca',
+      210: 'Regał magazynu',
+      211: 'Wirówka',
+      212: 'Igły do haftowania',
+      213: 'Kołowrotek',
+      214: 'Komplecik do dziergania',
+      215: 'Krosno',
+    };
   }
+
+  // ========================================
+  // NAWIGACJA
+  // ========================================
 
   /**
    * Nawiguje do tartaku używając speedlinka
@@ -79,102 +161,259 @@ export class ForestryModule {
     }
   }
 
-  /**
-   * Zbiera wszystkie gotowe drzewa jednym kliknięciem
-   * Używa przycisku #forestry_forest_button2 (Zbierz wszystkie)
-   */
-  async harvestAllTrees() {
-    const page = this.session.page;
-    this.log.info('Zbieranie wszystkich gotowych drzew...');
-    
-    try {
-      const harvestBtn = await page.$('#forestry_forest_button2');
-      if (harvestBtn) {
-        await harvestBtn.click();
-        await this.session.randomDelay(1000, 2000);
-        this.log.info('Użyto "Zbierz wszystkie" drzewa');
-        
-        // Obsłuż popup jeśli się pojawi
-        await this.handleGlobalPopup();
-        
-        return true;
-      }
-      
-      this.log.debug('Nie znaleziono przycisku zbierania');
-      return false;
-      
-    } catch (e) {
-      this.log.debug(`Błąd zbierania drzew: ${e.message}`);
-      return false;
-    }
-  }
+  // ========================================
+  // OBSŁUGA POPUPÓW
+  // ========================================
 
   /**
-   * Otwiera okno wyboru sadzonki
+   * Obsługuje popup - kliknięcie TAK (#globalbox_button1)
    */
-  async openSeedlingSelection() {
+  async clickPopupYes() {
     const page = this.session.page;
-    
     try {
-      const selectBtn = await page.$('#forestry_stock1_select');
-      if (selectBtn) {
-        await selectBtn.click();
-        await this.session.randomDelay(500, 1000);
-        this.log.debug('Otwarto okno wyboru sadzonki');
+      await this.session.randomDelay(300, 500);
+      const yesBtn = await page.$('#globalbox_button1');
+      if (yesBtn && await yesBtn.isVisible()) {
+        await yesBtn.click();
+        await this.session.randomDelay(300, 500);
         return true;
       }
-    } catch (e) {
-      this.log.debug(`Błąd otwierania wyboru sadzonki: ${e.message}`);
-    }
-    
+    } catch (e) {}
     return false;
   }
 
   /**
-   * Wybiera typ sadzonki do posadzenia
-   * @param {string|number} treeType - nazwa lub ID drzewa (np. 'swierk', 1, 'topola', 4)
+   * Obsługuje popup - kliknięcie NIE (#globalbox_button2)
    */
-  async selectSeedling(treeType = 'swierk') {
+  async clickPopupNo() {
+    const page = this.session.page;
+    try {
+      await this.session.randomDelay(300, 500);
+      const noBtn = await page.$('#globalbox_button2');
+      if (noBtn && await noBtn.isVisible()) {
+        await noBtn.click();
+        await this.session.randomDelay(300, 500);
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  /**
+   * Sprawdza czy jest widoczny popup
+   */
+  async isPopupVisible() {
+    const page = this.session.page;
+    try {
+      const globalbox = await page.$('#globalbox');
+      if (globalbox && await globalbox.isVisible()) {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  /**
+   * Pobiera treść popupu
+   */
+  async getPopupContent() {
+    const page = this.session.page;
+    try {
+      const content = await page.$eval('#globalbox_content', el => el.textContent || '').catch(() => '');
+      const headline = await page.$eval('#globalbox_headline', el => el.textContent || '').catch(() => '');
+      return { headline, content };
+    } catch (e) {
+      return { headline: '', content: '' };
+    }
+  }
+
+  /**
+   * Zamyka popup (klik na button1 - OK/TAK)
+   */
+  async closePopup() {
+    return await this.clickPopupYes();
+  }
+
+  // ========================================
+  // SADZONKI
+  // ========================================
+
+  /**
+   * Otwiera menu wyboru sadzonki
+   * Menu #forestry_stock1 ma domyślnie display:none
+   * Trzeba wykonać hover na #forestry_stock1_object lub użyć JS
+   */
+  async openSeedlingMenu() {
     const page = this.session.page;
     
-    // Konwertuj nazwę na ID
-    let treeId = typeof treeType === 'number' ? treeType : this.treeTypes[treeType.toLowerCase()];
-    if (!treeId) treeId = 1; // Domyślnie świerk
-    
-    this.log.info(`Wybieranie sadzonki: ID ${treeId}...`);
-    
-    // Otwórz okno wyboru sadzonki
-    const opened = await this.openSeedlingSelection();
-    if (!opened) {
-      this.log.debug('Nie udało się otworzyć wyboru sadzonki');
-      return false;
-    }
-    
-    await this.session.randomDelay(500, 1000);
-    
     try {
-      // Kliknij na wybraną sadzonkę: #f_stock_item{ID}
-      const itemSelector = `#f_stock_item${treeId}`;
-      const stockItem = await page.$(itemSelector);
+      // Metoda 1: Spróbuj hover na forestry_stock1_object
+      const stockObject = await page.$('#forestry_stock1_object');
+      if (stockObject) {
+        this.log.debug('Znaleziono #forestry_stock1_object, wykonuję hover...');
+        await stockObject.hover();
+        await this.session.randomDelay(500, 800);
+      }
       
-      if (stockItem) {
-        // Sprawdź czy mamy sadzonki tego typu
-        const amountSelector = `#f_stock_amount_${treeId}`;
-        const amount = await page.$eval(amountSelector, el => parseInt(el.textContent || '0')).catch(() => 0);
-        
-        if (amount <= 0) {
-          this.log.warn(`Brak sadzonek typu ${treeId}`);
-          return false;
+      // Sprawdź czy menu jest widoczne
+      const menuVisible = await page.evaluate(() => {
+        const menu = document.querySelector('#forestry_stock1');
+        if (menu) {
+          const style = window.getComputedStyle(menu);
+          return style.display !== 'none' && style.visibility !== 'hidden';
         }
-        
-        await stockItem.click();
-        await this.session.randomDelay(500, 1000);
-        this.log.info(`Wybrano sadzonkę ID ${treeId} (dostępne: ${amount})`);
+        return false;
+      });
+      
+      if (menuVisible) {
+        this.log.debug('Menu sadzonek jest widoczne po hover');
         return true;
       }
       
-      this.log.debug(`Nie znaleziono sadzonki: ${itemSelector}`);
+      // Metoda 2: Wymuś otwarcie menu przez JavaScript
+      this.log.debug('Menu niewidoczne po hover, wymuszam otwarcie przez JS...');
+      await page.evaluate(() => {
+        const menu = document.querySelector('#forestry_stock1');
+        if (menu) {
+          menu.style.display = 'block';
+          menu.style.visibility = 'visible';
+        }
+      });
+      
+      await this.session.randomDelay(300, 500);
+      
+      // Sprawdź ponownie
+      const menuVisibleAfterJS = await page.evaluate(() => {
+        const menu = document.querySelector('#forestry_stock1');
+        return menu && menu.style.display !== 'none';
+      });
+      
+      if (menuVisibleAfterJS) {
+        this.log.debug('Menu sadzonek otwarte przez JS');
+        return true;
+      }
+      
+      this.log.warn('Nie udało się otworzyć menu sadzonek');
       return false;
+      
+    } catch (e) {
+      this.log.debug(`Błąd otwierania menu sadzonek: ${e.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Pobiera dostępne sadzonki i ich ilości
+   */
+  async getAvailableSeedlings() {
+    const page = this.session.page;
+    const seedlings = [];
+    
+    // Otwórz menu sadzonek
+    await this.openSeedlingMenu();
+    await this.session.randomDelay(300, 500);
+    
+    for (const [id, name] of Object.entries(this.treeNames)) {
+      try {
+        const amountSelector = `#f_stock_amount_${id}`;
+        const amountEl = await page.$(amountSelector);
+        
+        if (amountEl) {
+          const amount = await page.$eval(amountSelector, el => parseInt(el.textContent || '0')).catch(() => 0);
+          
+          // Sprawdź czy sadzonka jest odblokowana (czy ma czas wzrostu widoczny)
+          const growingSelector = `#f_stock_growing_${id}`;
+          const growingEl = await page.$(growingSelector);
+          const isUnlocked = growingEl ? await growingEl.isVisible().catch(() => false) : false;
+          
+          seedlings.push({
+            id: parseInt(id),
+            name: name,
+            amount: amount,
+            unlocked: isUnlocked || amount > 0
+          });
+        }
+      } catch (e) {}
+    }
+    
+    return seedlings;
+  }
+
+  /**
+   * Wybiera sadzonkę do sadzenia
+   * @param {number} treeId - ID drzewa (1-10)
+   * 
+   * Gra używa funkcji forestrySetStockItem(type, treeId) gdzie:
+   * - type=1 oznacza drzewa/sadzonki
+   * - treeId to ID drzewa (1-10)
+   * Funkcja ustawia globalną zmienną forestry_plant = treeId
+   */
+  async selectSeedling(treeId) {
+    const page = this.session.page;
+    
+    this.log.info(`Wybieranie sadzonki: ${this.treeNames[treeId] || treeId}...`);
+    
+    try {
+      // Sprawdź ilość sadzonek i wywołaj funkcję gry forestrySetStockItem(1, treeId)
+      const result = await page.evaluate((treeId) => {
+        // Sprawdź ilość sadzonek
+        const amountEl = document.querySelector(`#f_stock_amount_${treeId}`);
+        const amount = amountEl ? parseInt(amountEl.textContent || '0') : 0;
+        
+        if (amount <= 0) {
+          return { success: false, reason: 'no_seedlings', amount: 0 };
+        }
+        
+        // Wywołaj funkcję gry do wyboru sadzonki
+        // forestrySetStockItem(type, treeId) gdzie type=1 oznacza drzewa
+        if (typeof forestrySetStockItem === 'function') {
+          forestrySetStockItem(1, treeId);
+          return { success: true, amount, method: 'forestrySetStockItem' };
+        }
+        
+        // Fallback: bezpośrednio ustaw zmienną globalną
+        if (typeof forestry_plant !== 'undefined') {
+          forestry_plant = treeId;
+          // Zaktualizuj ikonkę wybranej sadzonki
+          const selectEl = document.querySelector('#forestry_stock1_select');
+          if (selectEl) {
+            selectEl.className = 'f_m_symbol' + treeId;
+          }
+          return { success: true, amount, method: 'direct_variable' };
+        }
+        
+        return { success: false, reason: 'no_function_or_variable', amount };
+      }, treeId);
+      
+      if (result.success) {
+        this.log.info(`✓ Wybrano sadzonkę: ${this.treeNames[treeId]} (dostępne: ${result.amount}, metoda: ${result.method})`);
+        
+        // Ukryj menu sadzonek i przesuń kursor gdzieś indziej żeby zakończyć hover
+        await page.evaluate(() => {
+          const menu = document.querySelector('#forestry_stock1');
+          if (menu) {
+            menu.style.display = 'none';
+          }
+        });
+        
+        // Kliknij gdzieś neutralnie żeby wyjść z hover i rozpocząć sekwencję sadzenia
+        try {
+          const neutralElement = await page.$('#forestry_forest_button2'); // Przycisk "Zbierz wszystkie"
+          if (neutralElement) {
+            await neutralElement.hover();
+          }
+        } catch (e) {}
+        
+        await this.session.randomDelay(300, 500);
+        return true;
+      } else {
+        if (result.reason === 'no_seedlings') {
+          this.log.warn(`Brak sadzonek: ${this.treeNames[treeId]}`);
+        } else if (result.reason === 'no_function_or_variable') {
+          this.log.warn('Nie znaleziono funkcji forestrySetStockItem ani zmiennej forestry_plant');
+        }
+        return false;
+      }
       
     } catch (e) {
       this.log.debug(`Błąd wybierania sadzonki: ${e.message}`);
@@ -182,60 +421,286 @@ export class ForestryModule {
     }
   }
 
+  // ========================================
+  // ZBIERANIE DRZEW
+  // ========================================
+
+  /**
+   * Zbiera drzewo z pojedynczego pola
+   * @param {number} fieldNum - numer pola (1-25)
+   * @returns {string} 'harvested' | 'not_ready' | 'pest_cleared' | 'empty' | 'error'
+   */
+  async harvestTreeField(fieldNum) {
+    const page = this.session.page;
+    
+    try {
+      const fieldSelector = `#forestry_pos${fieldNum}`;
+      const field = await page.$(fieldSelector);
+      
+      if (!field) {
+        return 'error';
+      }
+      
+      // Sprawdź czy jest drzewo
+      const className = await field.getAttribute('class');
+      if (!className || !className.includes('tree')) {
+        return 'empty';
+      }
+      
+      // Kliknij na pole
+      await field.click();
+      await this.session.randomDelay(500, 800);
+      
+      // Sprawdź czy pojawił się popup
+      if (await this.isPopupVisible()) {
+        const { headline, content } = await this.getPopupContent();
+        
+        // Popup "Zebrać?" - drzewo niedojrzałe, zwrot sadzonki - kliknij NIE
+        if (headline.includes('Zebrać') || content.includes('zwrot sadzonki') || content.includes('nie jest jeszcze dojrzałe') || content.includes('nie urósł') || content.includes('nie urosło')) {
+          this.log.debug('Drzewo niedojrzałe - klikam NIE');
+          await this.clickPopupNo();
+          return 'not_ready';
+        }
+        
+        // Popup ze szkodnikiem - kliknij TAK i spróbuj ponownie
+        if (content.includes('szkodnik') || content.includes('Wywab') || headline.includes('Wyczyścić')) {
+          await this.clickPopupYes();
+          await this.session.randomDelay(500, 800);
+          
+          // Spróbuj zebrać ponownie
+          await field.click();
+          await this.session.randomDelay(500, 800);
+          
+          // Jeśli znów popup - sprawdź czy to nie pytanie o zebranie
+          if (await this.isPopupVisible()) {
+            const popup2 = await this.getPopupContent();
+            if (popup2.headline.includes('Zebrać') || popup2.content.includes('zwrot sadzonki')) {
+              await this.clickPopupNo();
+            } else {
+              await this.clickPopupNo(); // Bezpieczniej NIE niż TAK
+            }
+          }
+          
+          return 'pest_cleared';
+        }
+        
+        // Inny popup - bezpieczniej kliknij NIE
+        await this.clickPopupNo();
+      }
+      
+      return 'harvested';
+      
+    } catch (e) {
+      this.log.debug(`Błąd zbierania pola ${fieldNum}: ${e.message}`);
+      return 'error';
+    }
+  }
+
+  /**
+   * Zbiera wszystkie gotowe drzewa (ręcznie, pole po polu)
+   */
+  async harvestAllTreesManual() {
+    this.log.info('Zbieranie wszystkich gotowych drzew (manualnie)...');
+    
+    let harvested = 0;
+    let pestCleared = 0;
+    
+    for (let i = 1; i <= 25; i++) {
+      const result = await this.harvestTreeField(i);
+      
+      if (result === 'harvested') {
+        harvested++;
+        this.log.debug(`Pole ${i}: zebrane`);
+      } else if (result === 'pest_cleared') {
+        pestCleared++;
+        harvested++;
+        this.log.debug(`Pole ${i}: usunięto szkodnika i zebrane`);
+      }
+      
+      await this.session.randomDelay(200, 400);
+    }
+    
+    this.log.info(`Zebrano ${harvested} drzew, usunięto ${pestCleared} szkodników`);
+    return { harvested, pestCleared };
+  }
+
+  /**
+   * Zbiera wszystkie drzewa używając przycisku "Zbierz wszystkie"
+   */
+  async harvestAllTreesButton() {
+    const page = this.session.page;
+    this.log.info('Zbieranie wszystkich drzew (przycisk)...');
+    
+    try {
+      const harvestBtn = await page.$('#forestry_forest_button2');
+      if (harvestBtn) {
+        await harvestBtn.click();
+        await this.session.randomDelay(1000, 2000);
+        
+        // Obsłuż popup jeśli się pojawi - bezpieczniej NIE
+        if (await this.isPopupVisible()) {
+          const { headline, content } = await this.getPopupContent();
+          if (headline.includes('Zebrać') || content.includes('zwrot sadzonki') || content.includes('nie jest jeszcze dojrzałe')) {
+            await this.clickPopupNo();
+          } else {
+            await this.clickPopupYes(); // Potwierdzenie zbierania wszystkich
+          }
+        }
+        
+        this.log.info('Użyto "Zbierz wszystkie"');
+        return true;
+      }
+    } catch (e) {
+      this.log.debug(`Błąd zbierania: ${e.message}`);
+    }
+    
+    return false;
+  }
+
+  // ========================================
+  // SADZENIE DRZEW
+  // ========================================
+
+  /**
+   * Sadzi drzewo na pojedynczym polu (wymaga wcześniej wybranej sadzonki)
+   * @param {number} fieldNum - numer pola (1-25)
+   */
+  async plantTreeField(fieldNum) {
+    const page = this.session.page;
+    
+    try {
+      const fieldSelector = `#forestry_pos${fieldNum}`;
+      const field = await page.$(fieldSelector);
+      
+      if (!field) {
+        return false;
+      }
+      
+      // Sprawdź czy pole jest puste
+      const className = await field.getAttribute('class');
+      if (className && className.includes('tree')) {
+        // Już jest drzewo
+        return false;
+      }
+      
+      // Kliknij na pole żeby posadzić
+      await field.click();
+      await this.session.randomDelay(300, 500);
+      
+      // Sprawdź popup (np. szkodnik lub pytanie o usunięcie/zebranie niedojrzałego drzewa)
+      if (await this.isPopupVisible()) {
+        const { content, headline } = await this.getPopupContent();
+        
+        if (content.includes('szkodnik') || content.includes('Wywab')) {
+          // Szkodnik - klikamy TAK żeby usunąć
+          await this.clickPopupYes();
+          await this.session.randomDelay(300, 500);
+          
+          // Spróbuj posadzić ponownie
+          await field.click();
+          await this.session.randomDelay(300, 500);
+        } else if (headline.includes('Zebrać') || content.includes('zwrot sadzonki') || content.includes('nie jest jeszcze dojrzałe') || content.includes('usunąć') || content.includes('wyrzucić')) {
+          // Pytanie o zebranie/usunięcie niedojrzałego drzewa - klikamy NIE (odmowa)
+          this.log.debug('Popup o zebranie niedojrzałego drzewa - klikam NIE');
+          await this.clickPopupNo();
+          await this.session.randomDelay(300, 500);
+          return false;
+        } else {
+          await this.closePopup();
+        }
+      }
+      
+      return true;
+      
+    } catch (e) {
+      this.log.debug(`Błąd sadzenia pola ${fieldNum}: ${e.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Sadzi drzewa na wszystkich pustych polach
+   * @param {number} treeId - ID sadzonki do użycia
+   */
+  async plantAllTreesManual(treeId = 1) {
+    this.log.info(`Sadzenie drzew: ${this.treeNames[treeId] || treeId}...`);
+    
+    // Wybierz sadzonkę
+    const selected = await this.selectSeedling(treeId);
+    if (!selected) {
+      this.log.warn('Nie udało się wybrać sadzonki');
+      return 0;
+    }
+    
+    let planted = 0;
+    
+    for (let i = 1; i <= 25; i++) {
+      const success = await this.plantTreeField(i);
+      if (success) {
+        planted++;
+        this.log.debug(`Pole ${i}: posadzono`);
+      }
+      
+      await this.session.randomDelay(200, 400);
+    }
+    
+    this.log.info(`Posadzono ${planted} drzew`);
+    return planted;
+  }
+
   /**
    * Sadzi drzewa używając pomocnika do sadzenia
-   * Używa przycisku #forestry_forest_button6 (Pomocnik w sadzeniu)
    */
-  async plantAllTrees() {
+  async plantAllTreesButton() {
     const page = this.session.page;
-    this.log.info('Sadzenie drzew pomocnikiem...');
+    this.log.info('Sadzenie drzew (pomocnik)...');
     
     try {
       const plantBtn = await page.$('#forestry_forest_button6');
       if (plantBtn) {
         await plantBtn.click();
         await this.session.randomDelay(1000, 2000);
-        this.log.info('Użyto "Pomocnik w sadzeniu"');
         
-        // Obsłuż popup ze szkodnikiem jeśli się pojawi
-        let pestHandled = await this.handlePestPopup();
+        // Obsłuż popupy (szkodniki)
         let attempts = 0;
-        
-        // Powtarzaj dopóki są szkodniki (max 25 razy)
-        while (pestHandled && attempts < 25) {
-          this.log.debug('Obsłużono szkodnika, próbuję posadzić ponownie...');
-          await this.session.randomDelay(500, 1000);
+        while (await this.isPopupVisible() && attempts < 30) {
+          const { content } = await this.getPopupContent();
           
-          // Kliknij ponownie pomocnika do sadzenia
+          if (content.includes('szkodnik') || content.includes('Wywab')) {
+            await this.clickPopupYes();
+          } else {
+            await this.closePopup();
+            break;
+          }
+          
+          await this.session.randomDelay(300, 500);
+          
+          // Kliknij ponownie pomocnika
           const plantBtnRetry = await page.$('#forestry_forest_button6');
           if (plantBtnRetry) {
             await plantBtnRetry.click();
-            await this.session.randomDelay(1000, 2000);
+            await this.session.randomDelay(500, 800);
           }
           
-          pestHandled = await this.handlePestPopup();
           attempts++;
         }
         
-        // Obsłuż inne popupy
-        await this.handleGlobalPopup();
-        
+        this.log.info('Użyto "Pomocnik w sadzeniu"');
         return true;
       }
-      
-      this.log.debug('Nie znaleziono przycisku pomocnika sadzenia');
-      return false;
-      
     } catch (e) {
-      this.log.debug(`Błąd sadzenia drzew: ${e.message}`);
-      return false;
+      this.log.debug(`Błąd sadzenia: ${e.message}`);
     }
+    
+    return false;
   }
+
+  // ========================================
+  // PODLEWANIE
+  // ========================================
 
   /**
    * Podlewa wszystkie drzewa
-   * Używa przycisku #forestry_forest_button1 (Nawodnij)
-   * Możliwe co 24h
    */
   async waterAllTrees() {
     const page = this.session.page;
@@ -246,215 +711,25 @@ export class ForestryModule {
       if (waterBtn) {
         await waterBtn.click();
         await this.session.randomDelay(1000, 2000);
-        this.log.info('Użyto "Nawodnij" drzewa');
         
-        // Obsłuż popup (może być info że już podlane dzisiaj)
-        await this.handleGlobalPopup();
+        // Obsłuż popup (może być info że nic do podlania lub już podlane)
+        if (await this.isPopupVisible()) {
+          await this.closePopup();
+        }
         
+        this.log.info('Użyto "Nawodnij"');
         return true;
       }
-      
-      this.log.debug('Nie znaleziono przycisku podlewania');
-      return false;
-      
     } catch (e) {
-      this.log.debug(`Błąd podlewania drzew: ${e.message}`);
-      return false;
+      this.log.debug(`Błąd podlewania: ${e.message}`);
     }
-  }
-
-  /**
-   * Obsługuje popup ze szkodnikiem ("Wyczyścić pole?")
-   * @returns {boolean} true jeśli był i został obsłużony szkodnik
-   */
-  async handlePestPopup() {
-    const page = this.session.page;
-    
-    try {
-      await this.session.randomDelay(300, 500);
-      
-      const globalbox = await page.$('#globalbox');
-      if (!globalbox || !(await globalbox.isVisible())) {
-        return false;
-      }
-      
-      const content = await page.$eval('#globalbox_content', el => el.textContent || '').catch(() => '');
-      const headline = await page.$eval('#globalbox_headline', el => el.textContent || '').catch(() => '');
-      
-      // Sprawdź czy to popup ze szkodnikiem
-      if (headline.includes('Wyczyścić pole') || content.includes('Wywab natręta') || content.includes('szkodnik')) {
-        // Kliknij "Tak" aby usunąć szkodnika
-        const yesBtn = await page.$('#globalbox_button1');
-        if (yesBtn) {
-          await yesBtn.click();
-          await this.session.randomDelay(500, 1000);
-          this.log.info('Usunięto szkodnika z pola');
-          return true;
-        }
-      }
-    } catch (e) {}
     
     return false;
   }
 
-  /**
-   * Obsługuje ogólne popupy (potwierdzenia, błędy)
-   */
-  async handleGlobalPopup() {
-    const page = this.session.page;
-    
-    try {
-      await this.session.randomDelay(300, 500);
-      
-      const globalbox = await page.$('#globalbox');
-      if (!globalbox || !(await globalbox.isVisible())) {
-        return false;
-      }
-      
-      // Zamknij popup
-      const closeBtn = await page.$('#globalbox_button1');
-      if (closeBtn && await closeBtn.isVisible()) {
-        await closeBtn.click();
-        await this.session.randomDelay(300, 500);
-        return true;
-      }
-      
-      const closeX = await page.$('#globalbox_close');
-      if (closeX && await closeX.isVisible()) {
-        await closeX.click();
-        await this.session.randomDelay(300, 500);
-        return true;
-      }
-    } catch (e) {}
-    
-    return false;
-  }
-
-  /**
-   * Sprawdza stan pola z drzewem (1-25)
-   * @returns {Object} { status: 'growing'|'ready'|'empty'|'pest', timeLeft: string|null }
-   */
-  async getTreeFieldStatus(fieldNum) {
-    const page = this.session.page;
-    
-    try {
-      const infoSelector = `#forestry_pos_info${fieldNum}`;
-      const statusSelector = `#forestry_pos_status${fieldNum}`;
-      
-      const fieldInfo = await page.evaluate((infoSel, statusSel, num) => {
-        const info = document.querySelector(infoSel);
-        const status = document.querySelector(statusSel);
-        
-        // Sprawdź info (zawiera nazwę drzewa i status "Gotowe!")
-        const infoText = info ? (info.innerText || info.textContent || '') : '';
-        const isReady = infoText.includes('Gotowe');
-        
-        // Sprawdź czy jest drzewo (crop element)
-        const crop = document.querySelector(`#forestry_pos_crop${num}`);
-        const hasCrop = crop && crop.className && crop.className.length > 0;
-        
-        // Sprawdź timer w statusie
-        const statusText = status ? (status.innerText || status.textContent || '') : '';
-        const timerMatch = statusText.match(/(\d{2}:\d{2}:\d{2})/);
-        
-        // Sprawdź blokadę/szkodnika
-        const block = document.querySelector(`#forestry_pos_block${num}`);
-        const isBlocked = block && block.style.display !== 'none';
-        
-        return {
-          infoText: infoText.substring(0, 100),
-          isReady: isReady,
-          hasCrop: hasCrop,
-          timer: timerMatch ? timerMatch[1] : null,
-          isBlocked: isBlocked
-        };
-      }, infoSelector, statusSelector, fieldNum);
-      
-      if (!fieldInfo) {
-        return { status: 'unknown', timeLeft: null };
-      }
-      
-      if (fieldInfo.isBlocked) {
-        return { status: 'pest', timeLeft: null };
-      }
-      
-      if (fieldInfo.isReady) {
-        return { status: 'ready', timeLeft: '00:00:00' };
-      }
-      
-      if (fieldInfo.timer) {
-        if (fieldInfo.timer === '00:00:00') {
-          return { status: 'ready', timeLeft: '00:00:00' };
-        }
-        return { status: 'growing', timeLeft: fieldInfo.timer };
-      }
-      
-      if (fieldInfo.hasCrop) {
-        return { status: 'growing', timeLeft: null };
-      }
-      
-      return { status: 'empty', timeLeft: null };
-      
-    } catch (e) {
-      this.log.debug(`Błąd sprawdzania pola drzewa ${fieldNum}: ${e.message}`);
-      return { status: 'unknown', timeLeft: null };
-    }
-  }
-
-  /**
-   * Sprawdza stan wszystkich 25 pól z drzewami
-   */
-  async getAllTreeFieldsStatus() {
-    const statuses = [];
-    
-    for (let i = 1; i <= 25; i++) {
-      const status = await this.getTreeFieldStatus(i);
-      statuses.push({
-        field: i,
-        ...status
-      });
-    }
-    
-    // Podsumowanie
-    const summary = {
-      ready: statuses.filter(s => s.status === 'ready').length,
-      growing: statuses.filter(s => s.status === 'growing').length,
-      empty: statuses.filter(s => s.status === 'empty').length,
-      pest: statuses.filter(s => s.status === 'pest').length,
-    };
-    
-    this.log.info(`Pola drzew: ${summary.ready} gotowe, ${summary.growing} rośnie, ${summary.empty} puste, ${summary.pest} ze szkodnikiem`);
-    
-    return { fields: statuses, summary };
-  }
-
-  /**
-   * Pobiera dostępne sadzonki i ich ilości
-   */
-  async getAvailableSeedlings() {
-    const page = this.session.page;
-    const seedlings = [];
-    
-    const treeNames = {
-      1: 'Świerk', 2: 'Brzoza', 3: 'Buk', 4: 'Topola',
-      5: 'Kasztan', 7: 'Dąb', 8: 'Jesion', 9: 'Klon', 10: 'Wierzba'
-    };
-    
-    for (const [id, name] of Object.entries(treeNames)) {
-      try {
-        const amountSelector = `#f_stock_amount_${id}`;
-        const amount = await page.$eval(amountSelector, el => parseInt(el.textContent || '0')).catch(() => 0);
-        
-        seedlings.push({
-          id: parseInt(id),
-          name: name,
-          amount: amount
-        });
-      } catch (e) {}
-    }
-    
-    return seedlings.filter(s => s.amount > 0);
-  }
+  // ========================================
+  // BUDYNKI PRODUKCYJNE
+  // ========================================
 
   /**
    * Wchodzi do budynku produkcyjnego
@@ -462,14 +737,9 @@ export class ForestryModule {
    */
   async enterBuilding(buildingNum) {
     const page = this.session.page;
-    
-    if (buildingNum < 1 || buildingNum > 2) {
-      this.log.warn('Nieprawidłowy numer budynku (1-2)');
-      return false;
-    }
-    
     const buildingNames = { 1: 'Tartak', 2: 'Stolarnia' };
-    this.log.info(`Wchodzenie do budynku: ${buildingNames[buildingNum]}...`);
+    
+    this.log.info(`Wchodzenie do: ${buildingNames[buildingNum]}...`);
     
     try {
       const clickSelector = `#forestry_building_click${buildingNum}`;
@@ -478,17 +748,16 @@ export class ForestryModule {
       if (building) {
         await building.click();
         await this.session.randomDelay(1000, 2000);
-        await this.session.waitForPageReady();
         this.currentBuilding = buildingNum;
-        this.log.info(`Weszliśmy do budynku ${buildingNames[buildingNum]}`);
+        this.log.info(`Weszliśmy do: ${buildingNames[buildingNum]}`);
         return true;
       }
       
-      this.log.debug(`Nie znaleziono budynku: ${clickSelector}`);
+      this.log.warn(`Nie znaleziono budynku: ${buildingNames[buildingNum]}`);
       return false;
       
     } catch (e) {
-      this.log.debug(`Błąd wchodzenia do budynku ${buildingNum}: ${e.message}`);
+      this.log.debug(`Błąd wchodzenia do budynku: ${e.message}`);
       return false;
     }
   }
@@ -500,228 +769,31 @@ export class ForestryModule {
     const page = this.session.page;
     
     try {
-      // Najpierw zamknij ewentualne okno wyboru produkcji
-      const closeSelection = await page.$('[onclick*="closeForestrySelection"]');
-      if (closeSelection && await closeSelection.isVisible()) {
-        await closeSelection.click();
-        await this.session.randomDelay(300, 500);
-      }
+      // Zamknij ewentualne okno wyboru produkcji
+      await this.closeProductionSelection();
       
-      // Zamknij budynek - priorytetowo używamy closeForestryBuildingInner()
+      // Zamknij budynek
       const closeSelectors = [
-        '[onclick*="closeForestryBuildingInner"]', // Główny przycisk zamknięcia budynku tartaku
+        '[onclick*="closeForestryBuildingInner"]',
         '.big_close.link',
         '#forestry_building_inner_close',
-        '.forestry_building_close',
-        '.mini_close.link',
-        '#gardencancel',
       ];
       
       for (const selector of closeSelectors) {
         const closeBtn = await page.$(selector);
         if (closeBtn && await closeBtn.isVisible()) {
-          this.log.info(`Wychodzę z budynku używając: ${selector}`);
           await closeBtn.click();
-          await this.session.randomDelay(500, 1000);
+          await this.session.randomDelay(500, 800);
           this.currentBuilding = null;
           return true;
         }
       }
-      
-      this.log.warn('Nie znaleziono przycisku zamknięcia budynku');
     } catch (e) {
-      this.log.error(`Błąd przy wychodzeniu z budynku: ${e.message}`);
+      this.log.debug(`Błąd wychodzenia z budynku: ${e.message}`);
     }
     
     this.currentBuilding = null;
     return false;
-  }
-
-  /**
-   * Sprawdza status slotów produkcyjnych w aktualnym budynku
-   * @returns {Array} Lista slotów z ich statusem
-   */
-  async getProductionSlotsStatus() {
-    const page = this.session.page;
-    const slots = [];
-    
-    for (let slotNum = 1; slotNum <= 3; slotNum++) {
-      try {
-        const slotSelector = `#forestry_building_inner_slot${slotNum}`;
-        const slot = await page.$(slotSelector);
-        
-        if (!slot) continue;
-        
-        const slotInfo = await page.evaluate((num) => {
-          const slot = document.querySelector(`#forestry_building_inner_slot${num}`);
-          if (!slot) return null;
-          
-          // Sprawdź czy slot jest zablokowany
-          const lockedEl = document.querySelector(`#forestry_building_inner_slot_locked${num}`);
-          const isLocked = lockedEl && lockedEl.style.display !== 'none';
-          
-          // Sprawdź czy jest w trakcie produkcji
-          const cancelBtn = document.querySelector(`#forestry_building_inner_slot_cancel${num}`);
-          const isProducing = cancelBtn && cancelBtn.style.display !== 'none';
-          
-          // Sprawdź info slotu
-          const infoEl = document.querySelector(`#forestry_building_inner_slot_info${num}`);
-          const infoText = infoEl ? (infoEl.innerText || infoEl.textContent || '') : '';
-          
-          // Sprawdź czy można rozpocząć produkcję
-          const canStart = infoText.includes('Rozpocznij produkcję') && !isLocked && !isProducing;
-          
-          return {
-            slotNum: num,
-            isLocked: isLocked,
-            isProducing: isProducing,
-            canStart: canStart,
-            infoText: infoText.substring(0, 100)
-          };
-        }, slotNum);
-        
-        if (slotInfo) {
-          slots.push(slotInfo);
-          this.log.debug(`Slot ${slotNum}: ${slotInfo.isLocked ? 'zablokowany' : slotInfo.isProducing ? 'produkuje' : slotInfo.canStart ? 'wolny' : 'nieznany'}`);
-        }
-        
-      } catch (e) {
-        this.log.debug(`Błąd sprawdzania slotu ${slotNum}: ${e.message}`);
-      }
-    }
-    
-    return slots;
-  }
-
-  /**
-   * Otwiera okno wyboru produkcji dla slotu
-   * @param {number} slotNum - numer slotu (1-3)
-   */
-  async openProductionSelection(slotNum) {
-    const page = this.session.page;
-    
-    try {
-      // Kliknij na slot aby otworzyć wybór produkcji
-      const slotInfoSelector = `#forestry_building_inner_slot_info${slotNum}`;
-      const slotInfo = await page.$(slotInfoSelector);
-      
-      if (slotInfo && await slotInfo.isVisible()) {
-        await slotInfo.click();
-        await this.session.randomDelay(500, 1000);
-        return true;
-      }
-      
-      // Alternatywnie - kliknij na obrazek slotu
-      const slotImgSelector = `#forestry_building_inner_slot_img_main${slotNum}`;
-      const slotImg = await page.$(slotImgSelector);
-      
-      if (slotImg && await slotImg.isVisible()) {
-        await slotImg.click();
-        await this.session.randomDelay(500, 1000);
-        return true;
-      }
-      
-    } catch (e) {
-      this.log.debug(`Błąd otwierania wyboru produkcji: ${e.message}`);
-    }
-    
-    return false;
-  }
-
-  /**
-   * Pobiera listę dostępnych produktów do wyprodukowania
-   */
-  async getAvailableProducts() {
-    const page = this.session.page;
-    const products = [];
-    
-    try {
-      const items = await page.$$('.forestry_selectproduction_item');
-      
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        
-        const productInfo = await item.evaluate((el) => {
-          const onclick = el.getAttribute('onclick') || '';
-          
-          // Sprawdź czy produkt jest dostępny (ma onclick z dialogForestry)
-          const isAvailable = onclick.includes('dialogForestry') && onclick.includes('startproduction');
-          
-          // Parsuj parametry: dialogForestry('startproduction', buildingNum, slotNum, productId, quantity)
-          const match = onclick.match(/dialogForestry\('startproduction',\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)/);
-          
-          // Pobierz nazwę produktu
-          const nameEl = el.querySelector('[style*="font-weight:bold"]');
-          const name = nameEl ? (nameEl.innerText || nameEl.textContent || '').trim() : 'Nieznany';
-          
-          // Pobierz czas produkcji
-          const timeMatch = (el.innerText || '').match(/(\d{2}:\d{2}:\d{2})\s*h/);
-          
-          // Sprawdź czy ma wymagane surowce (klasa "important" = brak)
-          const hasImportant = el.querySelector('.important') !== null;
-          const hasMaterials = !hasImportant;
-          
-          return {
-            name: name,
-            isAvailable: isAvailable && hasMaterials,
-            hasMaterials: hasMaterials,
-            productionTime: timeMatch ? timeMatch[1] : null,
-            buildingNum: match ? parseInt(match[1]) : null,
-            slotNum: match ? parseInt(match[2]) : null,
-            productId: match ? parseInt(match[3]) : null,
-            quantity: match ? parseInt(match[4]) : null,
-          };
-        });
-        
-        if (productInfo.productId) {
-          products.push(productInfo);
-        }
-      }
-      
-    } catch (e) {
-      this.log.debug(`Błąd pobierania produktów: ${e.message}`);
-    }
-    
-    return products;
-  }
-
-  /**
-   * Rozpoczyna produkcję wybranego produktu
-   * @param {number} productId - ID produktu
-   * @param {number} buildingNum - numer budynku (1 lub 2)
-   * @param {number} slotNum - numer slotu (1-3)
-   */
-  async startProduction(productId, buildingNum = null, slotNum = null) {
-    const page = this.session.page;
-    
-    try {
-      // Znajdź element produktu i kliknij
-      const productSelector = `[onclick*="dialogForestry('startproduction'"][onclick*="${productId}"]`;
-      const product = await page.$(productSelector);
-      
-      if (product) {
-        await product.click();
-        await this.session.randomDelay(500, 1000);
-        
-        // Sprawdź czy pojawił się popup potwierdzenia
-        const confirmBtn = await page.$('#globalbox_button1');
-        if (confirmBtn && await confirmBtn.isVisible()) {
-          await confirmBtn.click();
-          await this.session.randomDelay(500, 1000);
-          this.log.info(`Rozpoczęto produkcję (ID: ${productId})`);
-          return true;
-        }
-        
-        return true;
-      }
-      
-      this.log.debug(`Nie znaleziono produktu ID: ${productId}`);
-      return false;
-      
-    } catch (e) {
-      this.log.debug(`Błąd rozpoczynania produkcji: ${e.message}`);
-      return false;
-    }
   }
 
   /**
@@ -731,17 +803,9 @@ export class ForestryModule {
     const page = this.session.page;
     
     try {
-      const closeBtn = await page.$('[onclick*="closeForestrySelection"]');
+      const closeBtn = await page.$('#forestry_production_select .mini_close');
       if (closeBtn && await closeBtn.isVisible()) {
         await closeBtn.click();
-        await this.session.randomDelay(300, 500);
-        return true;
-      }
-      
-      // Alternatywnie - mini_close
-      const miniClose = await page.$('#forestry_production_select .mini_close');
-      if (miniClose && await miniClose.isVisible()) {
-        await miniClose.click();
         await this.session.randomDelay(300, 500);
         return true;
       }
@@ -751,97 +815,413 @@ export class ForestryModule {
   }
 
   /**
-   * Automatycznie rozpoczyna produkcję w wolnych slotach
-   * @param {number} buildingNum - numer budynku (1 = Tartak, 2 = Stolarnia)
-   * @param {Array} preferredProducts - lista preferowanych ID produktów (opcjonalnie)
+   * Przechodzi do następnej strony produktów
+   * @returns {boolean} true jeśli udało się przejść
    */
-  async autoStartProduction(buildingNum, preferredProducts = []) {
-    this.log.info(`Auto-produkcja w budynku ${buildingNum}...`);
+  async goToNextProductPage() {
+    const page = this.session.page;
     
-    // Wejdź do budynku jeśli nie jesteśmy w środku
-    if (this.currentBuilding !== buildingNum) {
-      const entered = await this.enterBuilding(buildingNum);
-      if (!entered) {
-        this.log.warn('Nie można wejść do budynku');
-        return 0;
+    try {
+      const nextBtn = await page.$('#forestry_selectproduction_navi_next');
+      if (nextBtn && await nextBtn.isVisible()) {
+        await nextBtn.click();
+        await this.session.randomDelay(500, 800);
+        return true;
       }
-    }
+    } catch (e) {}
     
-    // Sprawdź wolne sloty
-    const slots = await this.getProductionSlotsStatus();
-    const freeSlots = slots.filter(s => s.canStart);
-    
-    if (freeSlots.length === 0) {
-      this.log.info('Brak wolnych slotów produkcyjnych');
-      return 0;
-    }
-    
-    this.log.info(`Znaleziono ${freeSlots.length} wolnych slotów`);
-    
-    let started = 0;
-    
-    for (const slot of freeSlots) {
-      // Otwórz wybór produkcji
-      const opened = await this.openProductionSelection(slot.slotNum);
-      if (!opened) continue;
-      
-      await this.session.randomDelay(500, 1000);
-      
-      // Pobierz dostępne produkty
-      const products = await this.getAvailableProducts();
-      const availableProducts = products.filter(p => p.isAvailable);
-      
-      if (availableProducts.length === 0) {
-        this.log.debug(`Brak dostępnych produktów dla slotu ${slot.slotNum}`);
-        await this.closeProductionSelection();
-        continue;
-      }
-      
-      // Wybierz produkt (preferowany lub pierwszy dostępny)
-      let selectedProduct = null;
-      
-      if (preferredProducts.length > 0) {
-        selectedProduct = availableProducts.find(p => preferredProducts.includes(p.productId));
-      }
-      
-      if (!selectedProduct) {
-        selectedProduct = availableProducts[0];
-      }
-      
-      // Rozpocznij produkcję
-      const success = await this.startProduction(selectedProduct.productId);
-      if (success) {
-        started++;
-        this.log.info(`Rozpoczęto produkcję: ${selectedProduct.name}`);
-      }
-      
-      await this.session.randomDelay(500, 1000);
-    }
-    
-    return started;
+    return false;
   }
 
   /**
+   * Pobiera dostępne produkty z aktualnej strony
+   * @returns {Array} Lista produktów z info o dostępności
+   */
+  async getAvailableProductsOnPage() {
+    const page = this.session.page;
+    const products = [];
+    
+    try {
+      const items = await page.$$('.forestry_selectproduction_item');
+      
+      for (const item of items) {
+        const productInfo = await item.evaluate((el) => {
+          const onclick = el.getAttribute('onclick') || '';
+          
+          // Sprawdź czy wymaga monet (coins.gif)
+          const requiresCoins = el.innerHTML.includes('coins.gif');
+          
+          // Sprawdź czy ma onclick z dialogForestry (= można produkować)
+          const hasOnclick = onclick.includes('dialogForestry') && onclick.includes('startproduction');
+          
+          // Parsuj parametry: dialogForestry('startproduction', buildingNum, slotNum, productId, quantity)
+          const match = onclick.match(/dialogForestry\('startproduction',\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)/);
+          
+          // Pobierz nazwę produktu
+          const nameEl = el.querySelector('[style*="font-weight:bold"]');
+          const name = nameEl ? nameEl.textContent?.trim() : 'Nieznany';
+          
+          // Pobierz czas produkcji
+          const timeMatch = el.textContent?.match(/(\d{2}:\d{2}:\d{2})\s*h/);
+          
+          // Sprawdź czy ma wymagane surowce (klasa "important" = brak)
+          const hasImportant = el.querySelector('.important') !== null;
+          const hasMaterials = !hasImportant;
+          
+          return {
+            name,
+            productId: match ? parseInt(match[3]) : null,
+            buildingNum: match ? parseInt(match[1]) : null,
+            slotNum: match ? parseInt(match[2]) : null,
+            quantity: match ? parseInt(match[4]) : null,
+            productionTime: timeMatch ? timeMatch[1] : null,
+            hasMaterials,
+            hasOnclick,
+            requiresCoins,
+            canProduce: hasOnclick && hasMaterials && !requiresCoins
+          };
+        });
+        
+        if (productInfo.productId) {
+          products.push(productInfo);
+        }
+      }
+    } catch (e) {
+      this.log.debug(`Błąd pobierania produktów: ${e.message}`);
+    }
+    
+    return products;
+  }
+
+  /**
+   * Pobiera wszystkie dostępne produkty (ze wszystkich stron)
+   */
+  async getAllAvailableProducts() {
+    const allProducts = [];
+    let pageNum = 1;
+    const maxPages = 5;
+    
+    while (pageNum <= maxPages) {
+      const products = await this.getAvailableProductsOnPage();
+      allProducts.push(...products);
+      
+      // Spróbuj przejść do następnej strony
+      const hasNext = await this.goToNextProductPage();
+      if (!hasNext) break;
+      
+      pageNum++;
+      await this.session.randomDelay(300, 500);
+    }
+    
+    return allProducts;
+  }
+
+  /**
+   * Rozpoczyna produkcję produktu
+   * @param {number} productId - ID produktu
+   * @param {Array} allProducts - lista wszystkich produktów (opcjonalnie)
+   */
+  async startProduction(productId, allProducts = null) {
+    const page = this.session.page;
+    
+    this.log.info(`Rozpoczynanie produkcji produktu ID: ${productId}...`);
+    
+    // Jeśli nie mamy listy produktów, pobierz ją
+    if (!allProducts) {
+      allProducts = await this.getAllAvailableProducts();
+    }
+    
+    // Znajdź produkt
+    const product = allProducts.find(p => p.productId === productId);
+    
+    if (!product) {
+      this.log.warn(`Nie znaleziono produktu ID: ${productId}`);
+      return false;
+    }
+    
+    if (!product.canProduce) {
+      this.log.warn(`Nie można produkować ${product.name}: brak zasobów lub wymaga monet`);
+      return false;
+    }
+    
+    try {
+      // Znajdź i kliknij element produktu
+      const productSelector = `.forestry_selectproduction_item[onclick*="${productId}"]`;
+      
+      // Przeszukaj strony żeby znaleźć produkt
+      let found = false;
+      let pageNum = 1;
+      
+      while (!found && pageNum <= 5) {
+        const productEl = await page.$(productSelector);
+        if (productEl) {
+          await productEl.click();
+          await this.session.randomDelay(500, 800);
+          found = true;
+          break;
+        }
+        
+        // Przejdź do następnej strony
+        const hasNext = await this.goToNextProductPage();
+        if (!hasNext) break;
+        pageNum++;
+        await this.session.randomDelay(300, 500);
+      }
+      
+      if (!found) {
+        this.log.warn(`Nie znaleziono elementu produktu ID: ${productId} na żadnej stronie`);
+        return false;
+      }
+      
+      // Potwierdź produkcję
+      await this.session.randomDelay(300, 500);
+      const confirmBtn = await page.$('#globalbox_button1');
+      if (confirmBtn && await confirmBtn.isVisible()) {
+        await confirmBtn.click();
+        await this.session.randomDelay(500, 800);
+        this.log.info(`Rozpoczęto produkcję: ${product.name}`);
+        return true;
+      }
+      
+      return true;
+      
+    } catch (e) {
+      this.log.debug(`Błąd rozpoczynania produkcji: ${e.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Automatycznie zarządza produkcją w budynku
+   * @param {number} buildingNum - 1 = Tartak, 2 = Stolarnia
+   * @param {Array} preferredProductIds - preferowane ID produktów (opcjonalnie)
+   */
+  async autoManageBuilding(buildingNum, preferredProductIds = []) {
+    const buildingNames = { 1: 'Tartak', 2: 'Stolarnia' };
+    this.log.info(`=== Auto-zarządzanie: ${buildingNames[buildingNum]} ===`);
+    
+    // Wejdź do budynku
+    const entered = await this.enterBuilding(buildingNum);
+    if (!entered) {
+      this.log.warn('Nie można wejść do budynku');
+      return { collected: 0, started: 0 };
+    }
+    
+    await this.session.randomDelay(500, 800);
+    const page = this.session.page;
+    
+    let collected = 0;
+    let started = 0;
+    
+    // Sprawdź oba sloty
+    for (let slotNum = 1; slotNum <= 2; slotNum++) {
+      this.log.info(`--- Sprawdzanie slotu ${slotNum} ---`);
+      
+      // Kliknij na slot
+      const slotSelector = `#forestry_building_inner_slot_img_main${slotNum}`;
+      const slot = await page.$(slotSelector);
+      
+      if (!slot) {
+        this.log.debug(`Slot ${slotNum} nie istnieje`);
+        continue;
+      }
+      
+      await slot.click();
+      await this.session.randomDelay(500, 800);
+      
+      // Sprawdź czy otworzyło się okno wyboru (= slot pusty)
+      const selectDiv = await page.$('#forestry_production_select');
+      const isSelectionOpen = selectDiv && await selectDiv.isVisible();
+      
+      if (isSelectionOpen) {
+        this.log.info(`Slot ${slotNum}: pusty - szukam produktu do produkcji`);
+        
+        // Pobierz dostępne produkty
+        const products = await this.getAllAvailableProducts();
+        const canProduce = products.filter(p => p.canProduce);
+        
+        this.log.info(`Dostępne produkty do produkcji: ${canProduce.length}`);
+        
+        if (canProduce.length > 0) {
+          // Wybierz produkt (preferowany lub pierwszy dostępny)
+          let selectedProduct = null;
+          
+          for (const prefId of preferredProductIds) {
+            selectedProduct = canProduce.find(p => p.productId === prefId);
+            if (selectedProduct) break;
+          }
+          
+          if (!selectedProduct) {
+            selectedProduct = canProduce[0];
+          }
+          
+          // Zamknij i otwórz ponownie żeby wrócić na początek
+          await this.closeProductionSelection();
+          await this.session.randomDelay(300, 500);
+          await slot.click();
+          await this.session.randomDelay(500, 800);
+          
+          const success = await this.startProduction(selectedProduct.productId, products);
+          if (success) {
+            started++;
+          }
+        } else {
+          this.log.warn('Brak produktów do produkcji - brak zasobów');
+          await this.closeProductionSelection();
+        }
+        
+      } else {
+        // Slot zajęty - sprawdź czy produkt gotowy (popup po kliknięciu = zebrany)
+        if (await this.isPopupVisible()) {
+          await this.closePopup();
+          collected++;
+          this.log.info(`Slot ${slotNum}: produkt zebrany`);
+        } else {
+          this.log.info(`Slot ${slotNum}: w produkcji`);
+        }
+      }
+      
+      await this.session.randomDelay(300, 500);
+    }
+    
+    // Wyjdź z budynku
+    await this.exitBuilding();
+    
+    this.log.info(`${buildingNames[buildingNum]}: zebrano ${collected}, rozpoczęto ${started}`);
+    return { collected, started };
+  }
+
+  // ========================================
+  // STATUS
+  // ========================================
+
+  /**
+   * Pobiera status tartaku - budynki i pierwsze drzewo
+   */
+  async getForestryStatus() {
+    this.log.info('Pobieranie statusu tartaku...');
+    
+    const page = this.session.page;
+    const status = {
+      building1: null,
+      building2: null,
+      firstTree: null,
+    };
+    
+    // Nawiguj do tartaku
+    const navigated = await this.navigateToForestry();
+    if (!navigated) {
+      return status;
+    }
+    
+    await this.session.closePopups();
+    await this.session.randomDelay(500, 1000);
+    
+    try {
+      // Status budynku 1 (Tartak)
+      const building1 = await page.$('#forestry_building1_production_line');
+      if (building1) {
+        const text = await building1.textContent();
+        const cleanText = text?.trim() || '';
+        const isReady = cleanText.toLowerCase().includes('gotowe');
+        const isEmpty = cleanText === '' || cleanText.length < 2;
+        
+        status.building1 = {
+          name: 'Tartak',
+          status: isEmpty ? 'empty' : (isReady ? 'ready' : 'working'),
+          timeLeft: isEmpty ? 'Brak produkcji' : (isReady ? 'Gotowe!' : cleanText),
+        };
+      }
+      
+      // Status budynku 2 (Stolarnia)
+      const building2 = await page.$('#forestry_building2_production_line');
+      if (building2) {
+        const text = await building2.textContent();
+        const cleanText = text?.trim() || '';
+        const isReady = cleanText.toLowerCase().includes('gotowe');
+        const isEmpty = cleanText === '' || cleanText.length < 2;
+        
+        status.building2 = {
+          name: 'Stolarnia',
+          status: isEmpty ? 'empty' : (isReady ? 'ready' : 'working'),
+          timeLeft: isEmpty ? 'Brak produkcji' : (isReady ? 'Gotowe!' : cleanText),
+        };
+      }
+      
+      // Status pierwszego drzewa
+      const treePos1 = await page.$('#forestry_pos1');
+      if (treePos1) {
+        await treePos1.hover();
+        await this.session.randomDelay(300, 500);
+        
+        const infoBox = await page.$('#forestry_pos_info1');
+        if (infoBox && await infoBox.isVisible()) {
+          const html = await infoBox.innerHTML();
+          const treeNameMatch = html.match(/<b>([^<]+)<\/b>/);
+          const timeMatch = html.match(/(\d{2}:\d{2}:\d{2})/);
+          const isReady = html.toLowerCase().includes('gotowe');
+          
+          status.firstTree = {
+            name: treeNameMatch ? treeNameMatch[1] : 'Drzewo',
+            status: isReady ? 'ready' : (timeMatch ? 'growing' : 'unknown'),
+            timeLeft: isReady ? 'Gotowe!' : (timeMatch ? timeMatch[1] : 'Brak danych'),
+          };
+        } else {
+          // Sprawdź czy pole puste
+          const className = await treePos1.getAttribute('class');
+          if (!className || !className.includes('tree')) {
+            status.firstTree = {
+              name: 'Puste pole',
+              status: 'empty',
+              timeLeft: 'Brak drzewa',
+            };
+          }
+        }
+      }
+      
+    } catch (e) {
+      this.log.warn(`Błąd pobierania statusu: ${e.message}`);
+    }
+    
+    return status;
+  }
+
+  // ========================================
+  // PEŁNY CYKL
+  // ========================================
+
+  /**
    * Wykonuje pełny cykl tartaku
-   * Sekwencja: 1. Zbierz wszystkie → 2. Wybierz sadzonkę → 3. Posadź wszystkie → 4. Podlej wszystkie
+   * @param {Object} options - Opcje cyklu
+   * @param {boolean} options.harvestTrees - Czy zbierać drzewa
+   * @param {boolean} options.plantTrees - Czy sadzić drzewa
+   * @param {boolean} options.waterTrees - Czy podlewać drzewa
+   * @param {number} options.preferredTreeId - ID preferowanej sadzonki (1-10)
+   * @param {boolean} options.manageBuildings - Czy zarządzać budynkami
+   * @param {Array} options.preferredProductIds - Preferowane ID produktów (legacy)
+   * @param {Object} options.buildingConfig - Konfiguracja budynków z frontendu
    */
   async fullForestryCycle(options = {}) {
     const {
       harvestTrees = true,
       plantTrees = true,
       waterTrees = true,
-      preferredTreeType = 'swierk', // Domyślnie świerk (najszybszy po topoli)
-      startProduction = true,
-      productionBuildings = [1, 2], // 1 = Tartak, 2 = Stolarnia
+      preferredTreeId = 1, // Świerk
+      manageBuildings = true,
+      preferredProductIds = [], // Legacy - puste = dowolny dostępny
+      buildingConfig = null, // Nowa konfiguracja z frontendu
     } = options;
     
-    this.log.info('=== Rozpoczynam cykl tartaku ===');
+    this.log.info('========================================');
+    this.log.info('=== ROZPOCZYNAM CYKL TARTAKU ===');
+    this.log.info('========================================');
     
     const results = {
-      treesHarvested: false,
-      treesPlanted: false,
+      treesHarvested: 0,
+      treesPlanted: 0,
       treesWatered: false,
-      productionsStarted: 0,
+      building1: { collected: 0, started: 0 },
+      building2: { collected: 0, started: 0 },
     };
     
     // Przejdź do tartaku
@@ -851,72 +1231,92 @@ export class ForestryModule {
       return results;
     }
     
-    // KROK 1: Zbierz wszystkie gotowe drzewa
+    await this.session.closePopups();
+    
+    // KROK 1: Zbierz drzewa
     if (harvestTrees) {
-      this.log.info('KROK 1: Zbieranie drzew...');
-      results.treesHarvested = await this.harvestAllTrees();
+      this.log.info('--- KROK 1: Zbieranie drzew ---');
+      const harvestResult = await this.harvestAllTreesManual();
+      results.treesHarvested = harvestResult.harvested;
       await this.session.randomDelay(500, 1000);
     }
     
-    // KROK 2: Wybierz sadzonkę i KROK 3: Posadź wszystkie
+    // KROK 2: Posadź drzewa
     if (plantTrees) {
-      this.log.info('KROK 2: Wybieranie sadzonki...');
+      this.log.info('--- KROK 2: Sadzenie drzew ---');
       
       // Sprawdź dostępne sadzonki
       const seedlings = await this.getAvailableSeedlings();
-      this.log.info(`Dostępne sadzonki: ${seedlings.map(s => `${s.name}(${s.amount})`).join(', ')}`);
+      const preferred = seedlings.find(s => s.id === preferredTreeId && s.amount > 0);
+      const treeToPlant = preferred || seedlings.find(s => s.amount > 0);
       
-      // Wybierz preferowaną sadzonkę lub pierwszą dostępną
-      let treeId = this.treeTypes[preferredTreeType.toLowerCase()] || 1;
-      const hasSeedling = seedlings.find(s => s.id === treeId);
-      
-      if (!hasSeedling || hasSeedling.amount <= 0) {
-        // Wybierz pierwszą dostępną sadzonkę
-        const firstAvailable = seedlings.find(s => s.amount > 0);
-        if (firstAvailable) {
-          treeId = firstAvailable.id;
-          this.log.info(`Brak preferowanej sadzonki, używam: ${firstAvailable.name}`);
-        } else {
-          this.log.warn('Brak dostępnych sadzonek!');
-          treeId = null;
-        }
+      if (treeToPlant) {
+        results.treesPlanted = await this.plantAllTreesManual(treeToPlant.id);
+      } else {
+        this.log.warn('Brak dostępnych sadzonek!');
       }
       
-      if (treeId) {
-        const selected = await this.selectSeedling(treeId);
-        if (selected) {
-          await this.session.randomDelay(500, 1000);
-          
-          this.log.info('KROK 3: Sadzenie drzew...');
-          results.treesPlanted = await this.plantAllTrees();
-          await this.session.randomDelay(500, 1000);
-        }
-      }
+      await this.session.randomDelay(500, 1000);
     }
     
-    // KROK 4: Podlej wszystkie (możliwe raz na 24h)
+    // KROK 3: Podlej drzewa
     if (waterTrees) {
-      this.log.info('KROK 4: Podlewanie drzew...');
+      this.log.info('--- KROK 3: Podlewanie drzew ---');
       results.treesWatered = await this.waterAllTrees();
       await this.session.randomDelay(500, 1000);
     }
     
-    // KROK 5: Rozpocznij produkcję w budynkach (opcjonalnie)
-    if (startProduction) {
-      for (const buildingNum of productionBuildings) {
-        const buildingNames = { 1: 'Tartak', 2: 'Stolarnia' };
-        this.log.info(`KROK 5: Produkcja w ${buildingNames[buildingNum]}...`);
-        
-        const started = await this.autoStartProduction(buildingNum);
-        results.productionsStarted += started;
-        
-        await this.exitBuilding();
-        await this.session.randomDelay(500, 1000);
+    // KROK 4: Zarządzaj budynkami
+    if (manageBuildings) {
+      this.log.info('--- KROK 4: Zarządzanie budynkami ---');
+      
+      // Przygotuj preferowane produkty z konfiguracji
+      let building1Products = [];
+      let building2Products = [];
+      
+      if (buildingConfig) {
+        // Nowa konfiguracja z frontendu
+        if (buildingConfig.building1?.slot1?.productId) {
+          building1Products.push(buildingConfig.building1.slot1.productId);
+        }
+        if (buildingConfig.building1?.slot2?.productId) {
+          building1Products.push(buildingConfig.building1.slot2.productId);
+        }
+        if (buildingConfig.building2?.slot1?.productId) {
+          building2Products.push(buildingConfig.building2.slot1.productId);
+        }
+        if (buildingConfig.building2?.slot2?.productId) {
+          building2Products.push(buildingConfig.building2.slot2.productId);
+        }
+      } else if (preferredProductIds.length > 0) {
+        // Legacy - wszystkie produkty do obu budynków
+        building1Products = preferredProductIds;
+        building2Products = preferredProductIds;
       }
+      
+      this.log.info(`Tartak preferowane: ${building1Products.length > 0 ? building1Products.join(', ') : 'auto'}`);
+      this.log.info(`Stolarnia preferowane: ${building2Products.length > 0 ? building2Products.join(', ') : 'auto'}`);
+      
+      // Tartak
+      await this.navigateToForestry();
+      await this.session.randomDelay(500, 800);
+      results.building1 = await this.autoManageBuilding(1, building1Products);
+      
+      // Stolarnia
+      await this.navigateToForestry();
+      await this.session.randomDelay(500, 800);
+      results.building2 = await this.autoManageBuilding(2, building2Products);
     }
     
-    this.log.info('=== Podsumowanie cyklu tartaku ===');
-    this.log.info(`Zebrano: ${results.treesHarvested ? 'TAK' : 'NIE'}, Posadzono: ${results.treesPlanted ? 'TAK' : 'NIE'}, Podlano: ${results.treesWatered ? 'TAK' : 'NIE'}, Produkcje: ${results.productionsStarted}`);
+    // Podsumowanie
+    this.log.info('========================================');
+    this.log.info('=== PODSUMOWANIE CYKLU TARTAKU ===');
+    this.log.info(`Zebrano drzew: ${results.treesHarvested}`);
+    this.log.info(`Posadzono drzew: ${results.treesPlanted}`);
+    this.log.info(`Podlano: ${results.treesWatered ? 'TAK' : 'NIE'}`);
+    this.log.info(`Tartak: zebrano ${results.building1.collected}, rozpoczęto ${results.building1.started}`);
+    this.log.info(`Stolarnia: zebrano ${results.building2.collected}, rozpoczęto ${results.building2.started}`);
+    this.log.info('========================================');
     
     // Loguj do bazy
     await logAction(this.account.id, 'forestry_cycle', results);

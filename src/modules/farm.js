@@ -7,7 +7,7 @@
  * - W budynku są pola do sadzenia/zbierania/podlewania
  */
 import { config } from '../config.js';
-import { updateField, logAction, scheduleTask } from '../database.js';
+import { updateField, logAction, scheduleTask, getFarmConfig } from '../database.js';
 
 // Flaga statyczna - czy roślina została już wybrana w tej sesji
 let cropAlreadySelected = false;
@@ -829,10 +829,21 @@ export class FarmModule {
       harvest = true,
       plant = true,
       water = true,
-      cropType = 'wheat',
+      cropType = null, // jeśli null, użyj konfiguracji z bazy danych per farma
     } = options;
     
     this.log.info('=== Rozpoczynam pełny cykl farmy ===');
+    
+    // Pobierz konfigurację roślin dla farm z bazy danych
+    let farmConfig = null;
+    if (!cropType) {
+      try {
+        farmConfig = getFarmConfig(this.account.id);
+        this.log.info(`Załadowano konfigurację farmy: ${JSON.stringify(farmConfig)}`);
+      } catch (e) {
+        this.log.warn(`Nie udało się pobrać konfiguracji farmy, używam domyślnej (zboże): ${e.message}`);
+      }
+    }
     
     const results = {
       harvested: 0,
@@ -842,6 +853,14 @@ export class FarmModule {
     
     for (const farmNum of farms) {
       this.log.info(`--- Farma ${farmNum} ---`);
+      
+      // Określ roślinę dla tej farmy
+      let farmCrop = cropType || 'zboze'; // domyślnie zboże
+      if (!cropType && farmConfig) {
+        const farmKey = `farm${farmNum}`;
+        farmCrop = farmConfig[farmKey] || 'zboze';
+        this.log.info(`Farma ${farmNum}: wybrana roślina "${farmCrop}" z konfiguracji`);
+      }
       
       // Przejdź do farmy
       const navigated = await this.navigateToFarm(farmNum);
@@ -893,7 +912,7 @@ export class FarmModule {
         
         // Sadzenie - tylko jeśli status był 'empty', 'ready' (po zebraniu) lub nieznany
         if (plant && (!status || status.status === 'empty' || status.status === 'ready' || status.status === 'unknown')) {
-          const p = await this.plantInCurrentBuilding(cropType);
+          const p = await this.plantInCurrentBuilding(farmCrop);
           results.planted += p;
           if (p > 0) this.log.info(`Posadzono ${p} roślin`);
         }
@@ -918,5 +937,108 @@ export class FarmModule {
     await logAction(this.account.id, 'farm_cycle', results);
     
     return results;
+  }
+
+  /**
+   * Pobiera live status wszystkich pól (czasy do zbioru)
+   * Format timerów: #farm_production_timer{farmNum}_{fieldNum}
+   * Zawartość: "Gotowe!" lub czas np. "02:15:30"
+   */
+  async getAllFieldsStatus() {
+    this.log.info('Pobieranie statusu pól...');
+    
+    const page = this.session.page;
+    const fieldsStatus = [];
+    
+    // Sprawdź farmy 1-4, pola 1-6
+    for (let farmNum = 1; farmNum <= 4; farmNum++) {
+      // Nawiguj do farmy
+      const navigated = await this.navigateToFarm(farmNum);
+      if (!navigated) continue;
+      
+      await this.session.closePopups();
+      await this.session.randomDelay(500, 1000);
+      
+      for (let fieldNum = 1; fieldNum <= 6; fieldNum++) {
+        try {
+          const timerId = `#farm_production_timer${farmNum}_${fieldNum}`;
+          const timerDiv = await page.$(timerId);
+          
+          if (timerDiv) {
+            const isVisible = await timerDiv.isVisible();
+            if (isVisible) {
+              const timerText = await timerDiv.textContent();
+              const cleanText = timerText.trim();
+              
+              // Sprawdź czy gotowe czy jeszcze rośnie
+              const isReady = cleanText.toLowerCase().includes('gotowe');
+              
+              // Pobierz typ rośliny (klasa kp1, kp2, etc.)
+              const plantDiv = await timerDiv.$('[class*="kp"]');
+              let plantType = null;
+              if (plantDiv) {
+                const className = await plantDiv.getAttribute('class');
+                const kpMatch = className?.match(/kp(\d+)/);
+                if (kpMatch) {
+                  plantType = this.getPlantNameById(parseInt(kpMatch[1]));
+                }
+              }
+              
+              // Parsuj czas jeśli nie gotowe
+              let timeLeft = null;
+              if (!isReady) {
+                const timeMatch = cleanText.match(/(\d{1,2}):(\d{2}):(\d{2})/);
+                if (timeMatch) {
+                  const hours = parseInt(timeMatch[1]);
+                  const minutes = parseInt(timeMatch[2]);
+                  const seconds = parseInt(timeMatch[3]);
+                  timeLeft = `${hours}h ${minutes}m`;
+                }
+              }
+              
+              fieldsStatus.push({
+                farm: farmNum,
+                field: fieldNum,
+                status: isReady ? 'ready' : 'growing',
+                timeLeft: isReady ? 'Gotowe!' : timeLeft,
+                plantType: plantType,
+                raw: cleanText,
+              });
+            }
+          }
+        } catch (e) {
+          this.log.debug(`Błąd sprawdzania pola ${farmNum}_${fieldNum}: ${e.message}`);
+        }
+      }
+    }
+    
+    this.log.info(`Znaleziono ${fieldsStatus.length} aktywnych pól`);
+    return fieldsStatus;
+  }
+
+  /**
+   * Mapuje ID rośliny na nazwę
+   */
+  getPlantNameById(id) {
+    const plants = {
+      1: 'Zboże',
+      2: 'Kukurydza', 
+      3: 'Koniczyna',
+      4: 'Rzepak',
+      5: 'Buraki pastewne',
+      6: 'Zioła',
+      7: 'Słoneczniki',
+      8: 'Bławatki',
+      17: 'Marchewki',
+      18: 'Ogórki',
+      19: 'Rzodkiewki',
+      20: 'Truskawki',
+      21: 'Pomidory',
+      22: 'Cebule',
+      23: 'Szpinak',
+      24: 'Kalafiory',
+      26: 'Ziemniaki',
+    };
+    return plants[id] || `Roślina ${id}`;
   }
 }

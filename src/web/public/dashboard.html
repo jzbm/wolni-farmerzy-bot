@@ -79,6 +79,68 @@
               <p class="no-data">Brak danych</p>
             </div>
           </div>
+          
+          <!-- Status tartaku -->
+          <div class="status-section">
+            <h4>🪵 Tartak</h4>
+            <div id="forestryStatus" class="forestry-status-grid">
+              <p class="no-data">Brak danych</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- KONFIGURACJA FARMY -->
+        <div class="config-panel">
+          <h3>🌾 Konfiguracja farmy</h3>
+          <p class="config-info">Wybierz roślinę do sadzenia na każdej farmie. Bot będzie automatycznie sadzić wybraną roślinę po zbiorze.</p>
+          
+          <div class="farm-config">
+            <!-- Farma 1 -->
+            <div class="farm-config-card">
+              <h4>🏠 Farma 1</h4>
+              <div class="slot-config">
+                <label>Roślina:</label>
+                <select id="farm1_crop">
+                  <option value="zboze">Zboże (10 min)</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Farma 2 -->
+            <div class="farm-config-card">
+              <h4>🏡 Farma 2</h4>
+              <div class="slot-config">
+                <label>Roślina:</label>
+                <select id="farm2_crop">
+                  <option value="zboze">Zboże (10 min)</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Farma 3 -->
+            <div class="farm-config-card">
+              <h4>🏘️ Farma 3</h4>
+              <div class="slot-config">
+                <label>Roślina:</label>
+                <select id="farm3_crop">
+                  <option value="zboze">Zboże (10 min)</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Farma 4 -->
+            <div class="farm-config-card">
+              <h4>🏰 Farma 4</h4>
+              <div class="slot-config">
+                <label>Roślina:</label>
+                <select id="farm4_crop">
+                  <option value="zboze">Zboże (10 min)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <button onclick="saveFarmConfig()" class="btn btn-primary">💾 Zapisz konfigurację farmy</button>
         </div>
         
         <!-- KONFIGURACJA STRAGANÓW -->
@@ -117,6 +179,160 @@
           </div>
           
           <button onclick="saveStallsConfig()" class="btn btn-primary">💾 Zapisz konfigurację straganów</button>
+        </div>
+        
+        <!-- KONFIGURACJA TARTAKU -->
+        <div class="config-panel">
+          <h3>🌲 Konfiguracja tartaku</h3>
+          <p class="config-info">Wybierz preferowane drzewo do sadzenia i produkty dla budynków. Pozostaw puste aby bot sam wybrał dostępny produkt.</p>
+          
+          <div class="forestry-config">
+            <!-- Wybór drzewa -->
+            <div class="forestry-tree-select">
+              <h4>🌳 Sadzonka do sadzenia</h4>
+              <div class="slot-config">
+                <label>Typ drzewa:</label>
+                <select id="forestryPreferredTree">
+                  <option value="swierk">Świerk (10h)</option>
+                  <option value="brzoza">Brzoza (16h)</option>
+                  <option value="buk">Buk (36h)</option>
+                  <option value="topola">Topola (8h)</option>
+                  <option value="kasztan">Kasztan</option>
+                  <option value="dab">Dąb</option>
+                  <option value="jesion">Jesion</option>
+                  <option value="klon">Klon</option>
+                  <option value="wierzba">Wierzba</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Tartak (Budynek 1) -->
+            <div class="forestry-building-card">
+              <h4>🏭 Tartak (Budynek 1)</h4>
+              <div class="slot-config">
+                <label>Slot 1:</label>
+                <select id="building1_slot1">
+                  <option value="">-- Auto (dowolny) --</option>
+                </select>
+              </div>
+              <div class="slot-config">
+                <label>Slot 2:</label>
+                <select id="building1_slot2">
+                  <option value="">-- Auto (dowolny) --</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Stolarnia (Budynek 2) -->
+            <div class="forestry-building-card">
+              <h4>🪚 Stolarnia (Budynek 2)</h4>
+              <div class="slot-config">
+                <label>Slot 1:</label>
+                <select id="building2_slot1">
+                  <option value="">-- Auto (dowolny) --</option>
+                </select>
+              </div>
+              <div class="slot-config">
+                <label>Slot 2:</label>
+                <select id="building2_slot2">
+                  <option value="">-- Auto (dowolny) --</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <button onclick="saveForestryConfig()" class="btn btn-primary">💾 Zapisz konfigurację tartaku</button>
+        </div>
+        
+        <!-- HARMONOGRAM -->
+        <div class="config-panel">
+          <h3>📅 Harmonogram automatyzacji</h3>
+          <p class="config-info">Skonfiguruj kiedy i jak często bot ma wykonywać akcje.</p>
+          
+          <div class="scheduler-config">
+            <!-- Tryb pracy -->
+            <div class="scheduler-mode-select">
+              <h4>⚙️ Tryb pracy</h4>
+              <div class="slot-config">
+                <label>Tryb harmonogramu:</label>
+                <select id="schedulerMode" onchange="updateSchedulerOptions()">
+                  <option value="interval">Interwałowy (co X minut)</option>
+                  <option value="smart_refresh">Inteligentny (przed końcem czasu)</option>
+                  <option value="window">Okno czasowe (np. 8:00-22:00)</option>
+                  <option value="daily">Dzienny (raz dziennie)</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Opcje interwału -->
+            <div id="intervalOptions" class="scheduler-options">
+              <h4>⏱️ Interwał</h4>
+              <div class="slot-config">
+                <label>Sprawdzaj co:</label>
+                <div class="input-with-unit">
+                  <input type="number" id="schedulerInterval" min="5" max="240" value="30">
+                  <span>minut</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Opcje smart refresh -->
+            <div id="smartRefreshOptions" class="scheduler-options hidden">
+              <h4>🧠 Inteligentne odświeżanie</h4>
+              <p class="option-info">Bot automatycznie zaplanuje akcję chwilę przed zakończeniem wzrostu rośliny/drzewa/produkcji.</p>
+              <div class="slot-config">
+                <label>Margines przed końcem:</label>
+                <div class="input-with-unit">
+                  <input type="number" id="refreshMargin" min="1" max="10" value="1">
+                  <span>minut</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Opcje okna czasowego -->
+            <div id="windowOptions" class="scheduler-options hidden">
+              <h4>🕐 Okno czasowe</h4>
+              <p class="option-info">Bot będzie aktywny tylko w określonych godzinach.</p>
+              <div class="slot-config">
+                <label>Od godziny:</label>
+                <input type="time" id="windowStart" value="08:00">
+              </div>
+              <div class="slot-config">
+                <label>Do godziny:</label>
+                <input type="time" id="windowEnd" value="22:00">
+              </div>
+              <div class="slot-config">
+                <label>Interwał w oknie:</label>
+                <div class="input-with-unit">
+                  <input type="number" id="windowInterval" min="5" max="120" value="30">
+                  <span>minut</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Opcje dzienne -->
+            <div id="dailyOptions" class="scheduler-options hidden">
+              <h4>📆 Zadanie dzienne</h4>
+              <p class="option-info">Bot wykona pełny cykl raz dziennie o określonej godzinie.</p>
+              <div class="slot-config">
+                <label>Godzina:</label>
+                <input type="time" id="dailyTime" value="08:00">
+              </div>
+            </div>
+            
+            <!-- Status kolejki -->
+            <div class="scheduler-queue-status">
+              <h4>📋 Kolejka zadań</h4>
+              <div id="taskQueueStatus" class="task-queue-list">
+                <p class="no-data">Brak zaplanowanych zadań</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="scheduler-actions">
+            <button onclick="saveSchedulerConfig()" class="btn btn-primary">💾 Zapisz harmonogram</button>
+            <button onclick="refreshTaskQueue()" class="btn btn-secondary">🔄 Odśwież kolejkę</button>
+          </div>
         </div>
         
         <!-- USTAWIENIA MODUŁÓW -->

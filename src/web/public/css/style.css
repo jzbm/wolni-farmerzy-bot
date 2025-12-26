@@ -1059,6 +1059,35 @@ body {
   border-color: #4caf50;
 }
 
+.field-status-item.growing {
+  background: #fff8e1;
+  border-color: #ffc107;
+}
+
+.field-status-item .field-location {
+  font-weight: 600;
+  color: #333;
+  min-width: 140px;
+}
+
+.field-status-item .field-plant {
+  flex: 1;
+  font-weight: 500;
+  color: var(--gray);
+}
+
+.field-status-item .field-time {
+  font-weight: 600;
+  color: #ff9800;
+  min-width: 80px;
+  text-align: right;
+}
+
+.field-status-item .field-time.ready {
+  color: #4caf50;
+}
+
+/* Legacy classes */
 .field-status-item .field-name {
   flex: 1;
   font-weight: 500;
@@ -1069,13 +1098,67 @@ body {
   font-size: 12px;
 }
 
-.field-status-item .field-time {
-  font-weight: 600;
-  color: var(--primary);
+/* Status tartaku */
+.forestry-status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.field-status-item.ready .field-time {
+.forestry-status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 15px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.forestry-status-item.ready {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+
+.forestry-status-item.working {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.forestry-status-item.growing {
+  background: #fff8e1;
+  border-color: #ffc107;
+}
+
+.forestry-status-item.empty {
+  background: #f5f5f5;
+  border-color: #e0e0e0;
+}
+
+.forestry-status-item .forestry-icon {
+  font-size: 18px;
+}
+
+.forestry-status-item .forestry-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.forestry-status-item .forestry-time {
+  font-weight: 600;
+  color: var(--gray);
+}
+
+.forestry-status-item.ready .forestry-time {
   color: #4caf50;
+}
+
+.forestry-status-item.working .forestry-time {
+  color: #2196f3;
+}
+
+.forestry-status-item.growing .forestry-time {
+  color: #ff9800;
 }
 
 /* Panel konfiguracji */
@@ -1115,6 +1198,40 @@ body {
 .stall-config-card h4 {
   margin-bottom: 12px;
   font-size: 14px;
+}
+
+/* Konfiguracja tartaku */
+.forestry-config {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.forestry-tree-select {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid #a5d6a7;
+}
+
+.forestry-tree-select h4 {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #2e7d32;
+}
+
+.forestry-building-card {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid #ffd54f;
+}
+
+.forestry-building-card h4 {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #f57f17;
 }
 
 .slot-config {
@@ -1226,4 +1343,194 @@ body {
   font-style: italic;
   padding: 20px;
   text-align: center;
+}
+
+/* ========================================
+   HARMONOGRAM / SCHEDULER
+   ======================================== */
+
+.scheduler-config {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.scheduler-mode-select {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: var(--radius);
+}
+
+.scheduler-mode-select h4 {
+  margin-bottom: 10px;
+  color: var(--dark);
+}
+
+.scheduler-options {
+  background: #fff;
+  padding: 15px;
+  border-radius: var(--radius);
+  border: 1px solid #e0e0e0;
+}
+
+.scheduler-options h4 {
+  margin-bottom: 8px;
+  color: var(--primary-dark);
+}
+
+.scheduler-options.hidden {
+  display: none;
+}
+
+.option-info {
+  font-size: 12px;
+  color: var(--gray);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-unit input {
+  width: 80px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.input-with-unit span {
+  color: var(--gray);
+  font-size: 14px;
+}
+
+.scheduler-queue-status {
+  background: #f0f7ff;
+  padding: 15px;
+  border-radius: var(--radius);
+  border: 1px solid #cce5ff;
+}
+
+.scheduler-queue-status h4 {
+  margin-bottom: 12px;
+  color: #004085;
+}
+
+.task-queue-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.task-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.task-queue-item:last-child {
+  margin-bottom: 0;
+}
+
+.task-queue-item .task-icon {
+  font-size: 16px;
+}
+
+.task-queue-item .task-type {
+  flex: 2;
+  font-weight: 500;
+}
+
+.task-queue-item .task-mode {
+  flex: 1;
+  font-size: 11px;
+  color: var(--gray);
+}
+
+.task-queue-item .task-time {
+  flex: 1;
+  font-size: 12px;
+  color: var(--secondary);
+  font-weight: 500;
+}
+
+.task-queue-item .task-priority {
+  font-size: 11px;
+}
+
+.task-queue-item.running {
+  background: #fff3cd;
+  border-left: 3px solid #ffc107;
+}
+
+.task-queue-item.completed {
+  background: #d4edda;
+  border-left: 3px solid var(--success);
+}
+
+.task-queue-item.failed {
+  background: #f8d7da;
+  border-left: 3px solid var(--danger);
+}
+
+.scheduler-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+/* Status schedulera w sidebarze */
+.status-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gray);
+}
+
+.status-indicator.running {
+  background: var(--success);
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.stopped {
+  background: var(--danger);
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Time input */
+input[type="time"] {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 120px;
+}
+
+input[type="time"]:focus {
+  outline: none;
+  border-color: var(--primary);
 }

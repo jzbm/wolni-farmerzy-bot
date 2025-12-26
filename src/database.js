@@ -107,6 +107,7 @@ export function initDatabase() {
       farm_auto_plant BOOLEAN DEFAULT 1,
       farm_auto_water BOOLEAN DEFAULT 0,
       farm_preferred_plants TEXT DEFAULT '["pszenica"]',
+      farm_config TEXT DEFAULT '{"farm1":"zboze","farm2":"zboze","farm3":"zboze","farm4":"zboze"}',
       
       -- STRAGANY
       stalls_enabled BOOLEAN DEFAULT 1,
@@ -120,6 +121,7 @@ export function initDatabase() {
       forestry_auto_water BOOLEAN DEFAULT 0,
       forestry_preferred_tree TEXT DEFAULT 'swierk',
       forestry_auto_production BOOLEAN DEFAULT 1,
+      forestry_building_config TEXT DEFAULT '{"building1":{"slot1":{"productId":null},"slot2":{"productId":null}},"building2":{"slot1":{"productId":null},"slot2":{"productId":null}}}',
       
       -- PIKNIK (todo)
       picnic_enabled BOOLEAN DEFAULT 0,
@@ -149,6 +151,22 @@ export function initDatabase() {
   try {
     db.exec(`ALTER TABLE automation_settings ADD COLUMN stalls_slot_config TEXT DEFAULT '{"stall1":{"slot1":{"productId":1,"productName":"Zboże","enabled":true},"slot2":{"productId":2,"productName":"Kukurydza","enabled":true}},"stall2":{"slot1":{"productId":3,"productName":"Koniczyna","enabled":true}}}'`);
     logger.info('Dodano kolumnę stalls_slot_config');
+  } catch (e) {
+    // Kolumna już istnieje - ignoruj
+  }
+  
+  // Migracja: dodaj kolumnę forestry_building_config jeśli nie istnieje
+  try {
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN forestry_building_config TEXT DEFAULT '{"building1":{"slot1":{"productId":null},"slot2":{"productId":null}},"building2":{"slot1":{"productId":null},"slot2":{"productId":null}}}'`);
+    logger.info('Dodano kolumnę forestry_building_config');
+  } catch (e) {
+    // Kolumna już istnieje - ignoruj
+  }
+  
+  // Migracja: dodaj kolumnę farm_config jeśli nie istnieje
+  try {
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN farm_config TEXT DEFAULT '{"farm1":"zboze","farm2":"zboze","farm3":"zboze","farm4":"zboze"}'`);
+    logger.info('Dodano kolumnę farm_config');
   } catch (e) {
     // Kolumna już istnieje - ignoruj
   }
@@ -420,6 +438,42 @@ export function updateStallSlotConfig(accountId, config) {
   const stmt = db.prepare(`
     UPDATE automation_settings SET stalls_slot_config = ? WHERE account_id = ?
   `);
+  return stmt.run(configStr, accountId);
+}
+
+// ============ KONFIGURACJA TARTAKU ============
+
+export function getForestryBuildingConfig(accountId) {
+  const stmt = db.prepare(`
+    SELECT forestry_building_config FROM automation_settings WHERE account_id = ?
+  `);
+  const result = stmt.get(accountId);
+  return result?.forestry_building_config || null;
+}
+
+export function updateForestryBuildingConfig(accountId, config) {
+  const configStr = typeof config === 'string' ? config : JSON.stringify(config);
+  const stmt = db.prepare(`
+    UPDATE automation_settings SET forestry_building_config = ? WHERE account_id = ?
+  `);
+  return stmt.run(configStr, accountId);
+}
+
+// ============ KONFIGURACJA FARMY ============
+
+export function getFarmConfig(accountId) {
+  const stmt = db.prepare(`
+    SELECT farm_config FROM automation_settings WHERE account_id = ?
+  `);
+  const result = stmt.get(accountId);
+  return result?.farm_config || null;
+}
+
+export function updateFarmConfig(accountId, config) {
+  const configStr = typeof config === 'string' ? config : JSON.stringify(config);
+  const sql = `UPDATE automation_settings SET farm_config = ? WHERE account_id = ?`;
+  logger.info('SQL:', sql, 'Values:', [configStr, accountId]);
+  const stmt = db.prepare(sql);
   return stmt.run(configStr, accountId);
 }
 

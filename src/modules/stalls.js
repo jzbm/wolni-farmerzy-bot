@@ -238,15 +238,18 @@ export class StallsModule {
   }
 
   /**
-   * Pobiera pełny status straganu (wszystkie sloty)
+   * Pobiera pełny status straganu (tylko odblokowane sloty)
+   * Stragan 1: 2 sloty, Stragan 2: 1 slot
    */
   async getStallStatus(stallNumber) {
     const slots = [];
     
-    // Maksymalnie 8 slotów w straganie
-    for (let i = 1; i <= 8; i++) {
+    // Tylko odblokowane sloty
+    const maxSlots = stallNumber === 1 ? 2 : 1;
+    
+    for (let i = 1; i <= maxSlots; i++) {
       const status = await this.getSlotStatus(stallNumber, i);
-      if (status.exists) {
+      if (status.exists && !status.locked) {
         slots.push(status);
       }
     }
@@ -254,9 +257,9 @@ export class StallsModule {
     return {
       stallNumber,
       slots,
-      unlockedSlots: slots.filter(s => !s.locked).length,
-      emptySlots: slots.filter(s => !s.locked && s.empty).length,
-      needsRefill: slots.filter(s => !s.locked && s.needsRefill).length,
+      unlockedSlots: slots.length,
+      emptySlots: slots.filter(s => s.empty).length,
+      needsRefill: slots.filter(s => s.needsRefill).length,
     };
   }
 
