@@ -28,9 +28,12 @@ import {
   getForestryBuildingConfig,
   updateForestryBuildingConfig,
   getFarmConfig,
-  updateFarmConfig
+  updateFarmConfig,
+  getSchedulerConfig,
+  updateSchedulerConfig,
+  saveGameStatusCache
 } from '../database.js';
-import { scheduler } from '../scheduler.js';
+import { scheduler, ModuleType } from '../simple-scheduler.js';
 import { browserManager } from '../browser.js';
 import { GameAuth } from '../modules/auth.js';
 import { FarmModule } from '../modules/farm.js';
@@ -192,7 +195,7 @@ app.delete('/api/accounts/:id', requireAuth, async (req, res) => {
     }
     
     // Zatrzymaj automatyzację jeśli działa
-    await scheduler.stopAccountAutomation(id);
+    await scheduler.deactivateAccount(id);
     
     deleteGameAccount(id);
     res.json({ success: true });
@@ -269,7 +272,7 @@ app.post('/api/accounts/:id/run-farm', requireAuth, async (req, res) => {
       farms: [1, 2, 3, 4],
       harvest: true,
       plant: true,
-      water: account.farm_auto_water,
+      water: true,
     });
     
     // Zamknij przeglądarkę
@@ -286,7 +289,7 @@ app.post('/api/accounts/:id/run-farm', requireAuth, async (req, res) => {
   }
 });
 
-// Pełny cykl (wszystkie moduły)
+// Dodaj wszystkie moduły do kolejki
 app.post('/api/accounts/:id/run-cycle', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -296,8 +299,18 @@ app.post('/api/accounts/:id/run-cycle', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Konto nie znalezione' });
     }
     
-    const results = await scheduler.runFullCycle(parseInt(id));
-    res.json({ success: true, results });
+    // Dodaj wszystkie włączone moduły do kolejki
+    if (account.farm_enabled) {
+      scheduler.runModule(parseInt(id), ModuleType.FARM);
+    }
+    if (account.forestry_enabled) {
+      scheduler.runModule(parseInt(id), ModuleType.FORESTRY);
+    }
+    if (account.stalls_enabled) {
+      scheduler.runModule(parseInt(id), ModuleType.STALLS);
+    }
+    
+    res.json({ success: true, message: 'Moduły dodane do kolejki' });
   } catch (error) {
     res.status(500).json({ error: `Błąd: ${error.message}` });
   }
@@ -411,7 +424,7 @@ app.post('/api/accounts/:id/start-automation', requireAuth, async (req, res) => 
       return res.status(404).json({ error: 'Konto nie znalezione' });
     }
     
-    await scheduler.startAccountAutomation(parseInt(id));
+    await scheduler.activateAccount(parseInt(id));
     res.json({ success: true, message: 'Automatyzacja uruchomiona' });
   } catch (error) {
     res.status(500).json({ error: `Błąd: ${error.message}` });
@@ -427,7 +440,7 @@ app.post('/api/accounts/:id/stop-automation', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Konto nie znalezione' });
     }
     
-    await scheduler.stopAccountAutomation(parseInt(id));
+    await scheduler.deactivateAccount(parseInt(id));
     res.json({ success: true, message: 'Automatyzacja zatrzymana' });
   } catch (error) {
     res.status(500).json({ error: `Błąd: ${error.message}` });
@@ -593,6 +606,13 @@ app.get('/api/accounts/:id/game-status', requireAuth, async (req, res) => {
     // Zamknij przeglądarkę
     await browserManager.closeSession(account.email);
     
+    // Zapisz do cache w bazie danych (dla smart mode)
+    try {
+      saveGameStatusCache(parseInt(id), { fieldsStatus, stallsStatus, forestryStatus });
+    } catch (e) {
+      console.error('Błąd zapisu cache statusu:', e);
+    }
+    
     res.json({ 
       stallsStatus,
       fieldsStatus,
@@ -670,18 +690,37 @@ app.get('/api/scheduler/accounts/:id/queue', requireAuth, (req, res) => {
   res.json({ queue });
 });
 
-// Aktywuj konto z określonym trybem
+// Pobierz konfigurację harmonogramu z bazy
+app.get('/api/scheduler/accounts/:id/config', requireAuth, (req, res) => {
+  const { id } = req.params;
+  try {
+    const config = getSchedulerConfig(parseInt(id));
+    res.json({ config });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Aktywuj konto z interwałami per moduł
 app.post('/api/scheduler/accounts/:id/activate', requireAuth, async (req, res) => {
   const { id } = req.params;
-  const { mode, intervalMinutes, windowStart, windowEnd, data } = req.body;
+  const { farmInterval, forestryInterval, stallsInterval, smartMode } = req.body;
   
   try {
+    // Zapisz konfigurację do bazy
+    updateSchedulerConfig(parseInt(id), {
+      farmInterval: farmInterval || 0,
+      forestryInterval: forestryInterval || 0,
+      stallsInterval: stallsInterval || 0,
+      smartMode: smartMode || false
+    });
+    
+    // Aktywuj w schedulerze
     await scheduler.activateAccount(parseInt(id), {
-      mode: mode || 'interval',
-      intervalMinutes: intervalMinutes || 30,
-      windowStart: windowStart,
-      windowEnd: windowEnd,
-      data: data
+      farmInterval: farmInterval || 0,
+      forestryInterval: forestryInterval || 0,
+      stallsInterval: stallsInterval || 0,
+      smartMode: smartMode || false
     });
     res.json({ success: true, message: 'Konto aktywowane' });
   } catch (error) {
@@ -689,57 +728,18 @@ app.post('/api/scheduler/accounts/:id/activate', requireAuth, async (req, res) =
   }
 });
 
-// Harmonogramuj zadanie dzienne
-app.post('/api/scheduler/accounts/:id/daily', requireAuth, async (req, res) => {
+// Uruchom pojedynczy moduł
+app.post('/api/scheduler/accounts/:id/run-module', requireAuth, async (req, res) => {
   const { id } = req.params;
-  const { taskType, hour, minute, data } = req.body;
+  const { moduleType } = req.body;
   
-  try {
-    const taskId = scheduler.scheduleDailyTask(
-      parseInt(id), 
-      taskType, 
-      hour || 8, 
-      minute || 0, 
-      data || {}
-    );
-    res.json({ success: true, taskId });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Harmonogramuj zadanie w oknie czasowym
-app.post('/api/scheduler/accounts/:id/window', requireAuth, async (req, res) => {
-  const { id } = req.params;
-  const { taskType, windowStart, windowEnd, intervalMinutes, data } = req.body;
-  
-  try {
-    const taskId = scheduler.scheduleWindowTask(
-      parseInt(id), 
-      taskType, 
-      windowStart || '08:00',
-      windowEnd || '22:00',
-      (intervalMinutes || 30) * 60 * 1000,
-      data || {}
-    );
-    res.json({ success: true, taskId });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Harmonogramuj łańcuch zadań
-app.post('/api/scheduler/accounts/:id/chain', requireAuth, async (req, res) => {
-  const { id } = req.params;
-  const { tasks } = req.body;
-  
-  if (!tasks || !Array.isArray(tasks)) {
-    return res.status(400).json({ error: 'Wymagana tablica zadań' });
+  if (!moduleType || !Object.values(ModuleType).includes(moduleType)) {
+    return res.status(400).json({ error: 'Nieprawidłowy typ modułu' });
   }
   
   try {
-    const taskId = scheduler.scheduleTaskChain(parseInt(id), tasks);
-    res.json({ success: true, taskId });
+    scheduler.runModule(parseInt(id), moduleType);
+    res.json({ success: true, message: `Moduł ${moduleType} dodany do kolejki` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -118,6 +118,39 @@ let currentStallsConfig = null;
 let currentForestryConfig = null;
 let currentFarmConfig = null;
 
+// Cache statusu gry per konto - używa localStorage dla persystencji
+const CACHE_TTL = 30 * 60 * 1000; // 30 minut w ms
+const TIMER_UPDATE_INTERVAL = 1000; // 1 sekunda - aktualizacja timerów
+let statusRefreshInterval = null;
+let timerUpdateInterval = null;
+
+// Funkcje cache localStorage
+function getStatusCache(accountId) {
+  try {
+    const key = `gameStatus_${accountId}`;
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    console.error('Błąd odczytu cache:', e);
+  }
+  return null;
+}
+
+function setStatusCache(accountId, data) {
+  try {
+    const key = `gameStatus_${accountId}`;
+    const cacheData = {
+      data: data,
+      fetchedAt: Date.now()
+    };
+    localStorage.setItem(key, JSON.stringify(cacheData));
+  } catch (e) {
+    console.error('Błąd zapisu cache:', e);
+  }
+}
+
 // ============ API HELPER ============
 
 async function api(method, url, data = null) {
@@ -167,6 +200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initFarmSelects();
   initEventListeners();
   loadSchedulerStatus();
+  startStatusAutoRefresh(); // Auto-refresh statusu gry co 30 min
 });
 
 async function checkAuth() {
@@ -191,12 +225,6 @@ function initEventListeners() {
     } catch (error) {
       showToast(error.message, 'error');
     }
-  });
-  
-  // Formularz ustawień
-  document.getElementById('settingsForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await saveSettings();
   });
 }
 
@@ -427,19 +455,30 @@ async function loadFarmConfig() {
   try {
     const data = await api('GET', `/api/accounts/${selectedAccountId}/farm-config`);
     currentFarmConfig = data.config;
+    console.log('Załadowano konfigurację farmy:', currentFarmConfig);
     
     if (currentFarmConfig) {
-      if (currentFarmConfig.farm1) {
-        document.getElementById('farm1_crop').value = currentFarmConfig.farm1;
+      // Ustaw wartości selectów
+      const farm1Select = document.getElementById('farm1_crop');
+      const farm2Select = document.getElementById('farm2_crop');
+      const farm3Select = document.getElementById('farm3_crop');
+      const farm4Select = document.getElementById('farm4_crop');
+      
+      if (farm1Select && currentFarmConfig.farm1) {
+        farm1Select.value = currentFarmConfig.farm1;
+        console.log('Ustawiono farm1:', currentFarmConfig.farm1, '-> wartość:', farm1Select.value);
       }
-      if (currentFarmConfig.farm2) {
-        document.getElementById('farm2_crop').value = currentFarmConfig.farm2;
+      if (farm2Select && currentFarmConfig.farm2) {
+        farm2Select.value = currentFarmConfig.farm2;
+        console.log('Ustawiono farm2:', currentFarmConfig.farm2, '-> wartość:', farm2Select.value);
       }
-      if (currentFarmConfig.farm3) {
-        document.getElementById('farm3_crop').value = currentFarmConfig.farm3;
+      if (farm3Select && currentFarmConfig.farm3) {
+        farm3Select.value = currentFarmConfig.farm3;
+        console.log('Ustawiono farm3:', currentFarmConfig.farm3, '-> wartość:', farm3Select.value);
       }
-      if (currentFarmConfig.farm4) {
-        document.getElementById('farm4_crop').value = currentFarmConfig.farm4;
+      if (farm4Select && currentFarmConfig.farm4) {
+        farm4Select.value = currentFarmConfig.farm4;
+        console.log('Ustawiono farm4:', currentFarmConfig.farm4, '-> wartość:', farm4Select.value);
       }
     }
   } catch (error) {
@@ -501,6 +540,12 @@ async function loadAccounts() {
         <div class="account-server">Serwer ${acc.server}</div>
       </div>
     `).join('');
+    
+    // Automatycznie wybierz ostatnie używane konto z localStorage
+    const savedAccountId = localStorage.getItem('selectedAccountId');
+    if (savedAccountId && data.accounts.some(acc => acc.id == savedAccountId)) {
+      await selectAccount(parseInt(savedAccountId));
+    }
   } catch (error) {
     showToast('Błąd ładowania kont', 'error');
   }
@@ -508,6 +553,9 @@ async function loadAccounts() {
 
 async function selectAccount(accountId) {
   selectedAccountId = accountId;
+  
+  // Zapisz wybrane konto do localStorage
+  localStorage.setItem('selectedAccountId', accountId);
   
   document.getElementById('welcomeScreen').classList.add('hidden');
   document.getElementById('accountDetails').classList.remove('hidden');
@@ -523,18 +571,6 @@ async function selectAccount(accountId) {
     
     document.getElementById('accountEmail').textContent = account.email;
     
-    // Ustawienia
-    document.getElementById('farmEnabled').checked = account.farm_enabled;
-    document.getElementById('farmAutoHarvest').checked = account.farm_auto_harvest;
-    document.getElementById('farmAutoPlant').checked = account.farm_auto_plant;
-    document.getElementById('farmAutoWater').checked = account.farm_auto_water;
-    document.getElementById('stallsEnabled').checked = account.stalls_enabled;
-    document.getElementById('stallsAutoRestock').checked = account.stalls_auto_restock;
-    document.getElementById('forestryEnabled').checked = account.forestry_enabled;
-    document.getElementById('forestryAutoHarvest').checked = account.forestry_auto_harvest;
-    document.getElementById('forestryAutoPlant').checked = account.forestry_auto_plant;
-    document.getElementById('forestryAutoProduction').checked = account.forestry_auto_production;
-    
     // Załaduj konfigurację straganów
     await loadStallsConfig();
     
@@ -547,8 +583,11 @@ async function selectAccount(accountId) {
     // Załaduj logi
     await loadLogs();
     
-    // Załaduj kolejkę zadań harmonogramu
-    await refreshTaskQueue();
+    // Załaduj status harmonogramu
+    await refreshSchedulerStatus();
+    
+    // Załaduj status gry (z cache lub świeży)
+    await refreshGameStatus();
     
   } catch (error) {
     showToast(error.message, 'error');
@@ -557,33 +596,224 @@ async function selectAccount(accountId) {
 
 // ============ STATUS GRY ============
 
-async function refreshGameStatus() {
+// Pobiera status z cache (localStorage) lub z serwera jeśli cache jest nieaktualny
+async function refreshGameStatus(forceRefresh = false) {
   if (!selectedAccountId) return;
+  
+  // Sprawdź cache w localStorage
+  const cached = getStatusCache(selectedAccountId);
+  const now = Date.now();
+  
+  if (!forceRefresh && cached && (now - cached.fetchedAt) < CACHE_TTL) {
+    // Użyj danych z cache - przelicz czasy na podstawie upływu czasu
+    const adjustedData = adjustTimersFromCache(cached.data, cached.fetchedAt);
+    displayGameStatus(adjustedData);
+    const cacheAge = Math.round((now - cached.fetchedAt) / 60000);
+    document.getElementById('statusFetchTime').textContent = 
+      `(z cache, ${cacheAge} min temu)`;
+    
+    // Uruchom live timery
+    startLiveTimers();
+    return;
+  }
   
   showModuleStatus('Pobieranie statusu z gry...');
   
   try {
     const data = await api('GET', `/api/accounts/${selectedAccountId}/game-status`);
     
+    // Zapisz do cache w localStorage
+    setStatusCache(selectedAccountId, data);
+    
+    // Wyświetl dane
+    displayGameStatus(data);
+    
     // Aktualizuj czas pobrania
     document.getElementById('statusFetchTime').textContent = 
-      `(${new Date(data.fetchedAt).toLocaleTimeString()})`;
+      `(${new Date().toLocaleTimeString()})`;
     
-    // Wyświetl status straganów
-    displayStallsStatus(data.stallsStatus);
-    
-    // Wyświetl status pól (live z gry)
-    displayFieldsStatus(data.fieldsStatus);
-    
-    // Wyświetl status tartaku
-    displayForestryStatus(data.forestryStatus);
+    // Uruchom live timery
+    startLiveTimers();
     
     showModuleStatus('Status pobrany!', 'success');
     setTimeout(hideModuleStatus, 2000);
     
   } catch (error) {
+    // Przy błędzie spróbuj użyć cache nawet jeśli stary
+    const cached = getStatusCache(selectedAccountId);
+    if (cached) {
+      const adjustedData = adjustTimersFromCache(cached.data, cached.fetchedAt);
+      displayGameStatus(adjustedData);
+      const cacheAge = Math.round((now - cached.fetchedAt) / 60000);
+      document.getElementById('statusFetchTime').textContent = 
+        `(stary cache, ${cacheAge} min temu)`;
+      startLiveTimers();
+    }
     showModuleStatus(`Błąd: ${error.message}`, 'error');
     setTimeout(hideModuleStatus, 5000);
+  }
+}
+
+// Przelicza timery z cache na podstawie upływu czasu
+function adjustTimersFromCache(data, fetchedAt) {
+  const elapsedSeconds = Math.floor((Date.now() - fetchedAt) / 1000);
+  
+  // Kopiuj dane żeby nie modyfikować oryginału
+  const adjusted = JSON.parse(JSON.stringify(data));
+  
+  // Dostosuj czasy pól (fieldsStatus)
+  if (adjusted.fieldsStatus) {
+    adjusted.fieldsStatus = adjusted.fieldsStatus.map(field => {
+      if (field.timeLeft && field.status !== 'ready') {
+        const newSeconds = Math.max(0, parseTimeToSeconds(field.timeLeft) - elapsedSeconds);
+        if (newSeconds <= 0) {
+          field.status = 'ready';
+          field.timeLeft = 'Gotowe!';
+        } else {
+          field.timeLeft = formatSecondsToTime(newSeconds);
+        }
+      }
+      return field;
+    });
+  }
+  
+  // Dostosuj czasy tartaku (forestryStatus)
+  if (adjusted.forestryStatus) {
+    if (adjusted.forestryStatus.trees) {
+      adjusted.forestryStatus.trees = adjusted.forestryStatus.trees.map(tree => {
+        if (tree.timeLeft && tree.status !== 'ready') {
+          const newSeconds = Math.max(0, parseTimeToSeconds(tree.timeLeft) - elapsedSeconds);
+          if (newSeconds <= 0) {
+            tree.status = 'ready';
+            tree.timeLeft = 'Gotowe!';
+          } else {
+            tree.timeLeft = formatSecondsToTime(newSeconds);
+          }
+        }
+        return tree;
+      });
+    }
+  }
+  
+  return adjusted;
+}
+
+// Parsuje czas "HH:MM:SS" lub "MM:SS" na sekundy
+function parseTimeToSeconds(timeStr) {
+  if (!timeStr || timeStr === 'Gotowe!' || timeStr === 'Gotowy!' || timeStr === 'ready') {
+    return 0;
+  }
+  
+  const parts = timeStr.split(':').map(p => parseInt(p, 10) || 0);
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 0;
+}
+
+// Formatuje sekundy na "HH:MM:SS" lub "MM:SS"
+function formatSecondsToTime(totalSeconds) {
+  if (totalSeconds <= 0) return 'Gotowe!';
+  
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Uruchamia live timery - co sekundę aktualizuje wyświetlane czasy
+function startLiveTimers() {
+  // Zatrzymaj poprzedni interval
+  if (timerUpdateInterval) {
+    clearInterval(timerUpdateInterval);
+  }
+  
+  timerUpdateInterval = setInterval(() => {
+    updateDisplayedTimers();
+  }, TIMER_UPDATE_INTERVAL);
+}
+
+// Aktualizuje wyświetlane timery - odejmuje 1 sekundę od każdego
+function updateDisplayedTimers() {
+  // Aktualizuj timery pól
+  document.querySelectorAll('.field-time:not(.ready)').forEach(el => {
+    const currentTime = el.textContent;
+    const seconds = parseTimeToSeconds(currentTime);
+    if (seconds > 0) {
+      el.textContent = formatSecondsToTime(seconds - 1);
+    } else {
+      el.textContent = 'Gotowe!';
+      el.classList.add('ready');
+    }
+  });
+  
+  // Aktualizuj timery tartaku (drzewa)
+  document.querySelectorAll('.tree-time:not(.ready)').forEach(el => {
+    const currentTime = el.textContent;
+    const seconds = parseTimeToSeconds(currentTime);
+    if (seconds > 0) {
+      el.textContent = formatSecondsToTime(seconds - 1);
+    } else {
+      el.textContent = 'Gotowe!';
+      el.classList.add('ready');
+    }
+  });
+  
+  // Aktualizuj timery produkcji tartaku
+  document.querySelectorAll('.production-time:not(.ready)').forEach(el => {
+    const currentTime = el.textContent;
+    const seconds = parseTimeToSeconds(currentTime);
+    if (seconds > 0) {
+      el.textContent = formatSecondsToTime(seconds - 1);
+    } else {
+      el.textContent = 'Gotowe!';
+      el.classList.add('ready');
+    }
+  });
+}
+
+// Zatrzymuje live timery
+function stopLiveTimers() {
+  if (timerUpdateInterval) {
+    clearInterval(timerUpdateInterval);
+    timerUpdateInterval = null;
+  }
+}
+
+// Wyświetla status gry (używane przez cache i fresh fetch)
+function displayGameStatus(data) {
+  displayStallsStatus(data.stallsStatus);
+  displayFieldsStatus(data.fieldsStatus);
+  displayForestryStatus(data.forestryStatus);
+}
+
+// Uruchamia automatyczne odświeżanie statusu co 30 min
+function startStatusAutoRefresh() {
+  // Zatrzymaj poprzedni interval jeśli istnieje
+  if (statusRefreshInterval) {
+    clearInterval(statusRefreshInterval);
+  }
+  
+  // Odświeżaj co 30 minut (tylko jeśli jest wybrane konto)
+  statusRefreshInterval = setInterval(() => {
+    if (selectedAccountId) {
+      console.log('Auto-refresh statusu gry...');
+      refreshGameStatus(true); // force refresh
+    }
+  }, CACHE_TTL);
+}
+
+// Zatrzymuje automatyczne odświeżanie
+function stopStatusAutoRefresh() {
+  if (statusRefreshInterval) {
+    clearInterval(statusRefreshInterval);
+    statusRefreshInterval = null;
   }
 }
 
@@ -665,13 +895,14 @@ function displayForestryStatus(forestryStatus) {
   // Budynek 1 - Tartak
   if (forestryStatus.building1) {
     const b1 = forestryStatus.building1;
-    const statusClass = b1.status === 'ready' ? 'ready' : (b1.status === 'working' ? 'working' : 'empty');
-    const icon = b1.status === 'ready' ? '✅' : (b1.status === 'working' ? '⚙️' : '⬜');
+    const isReady = b1.status === 'ready' || b1.timeLeft === 'Gotowe!';
+    const statusClass = isReady ? 'ready' : (b1.status === 'working' ? 'working' : 'empty');
+    const icon = isReady ? '✅' : (b1.status === 'working' ? '⚙️' : '⬜');
     items.push(`
       <div class="forestry-status-item ${statusClass}">
         <span class="forestry-icon">${icon}</span>
         <span class="forestry-name">🏭 ${b1.name}</span>
-        <span class="forestry-time">${b1.timeLeft}</span>
+        <span class="production-time ${isReady ? 'ready' : ''}">${b1.timeLeft}</span>
       </div>
     `);
   }
@@ -679,13 +910,14 @@ function displayForestryStatus(forestryStatus) {
   // Budynek 2 - Stolarnia
   if (forestryStatus.building2) {
     const b2 = forestryStatus.building2;
-    const statusClass = b2.status === 'ready' ? 'ready' : (b2.status === 'working' ? 'working' : 'empty');
-    const icon = b2.status === 'ready' ? '✅' : (b2.status === 'working' ? '⚙️' : '⬜');
+    const isReady = b2.status === 'ready' || b2.timeLeft === 'Gotowe!';
+    const statusClass = isReady ? 'ready' : (b2.status === 'working' ? 'working' : 'empty');
+    const icon = isReady ? '✅' : (b2.status === 'working' ? '⚙️' : '⬜');
     items.push(`
       <div class="forestry-status-item ${statusClass}">
         <span class="forestry-icon">${icon}</span>
         <span class="forestry-name">🪚 ${b2.name}</span>
-        <span class="forestry-time">${b2.timeLeft}</span>
+        <span class="production-time ${isReady ? 'ready' : ''}">${b2.timeLeft}</span>
       </div>
     `);
   }
@@ -693,13 +925,14 @@ function displayForestryStatus(forestryStatus) {
   // Pierwsze drzewo
   if (forestryStatus.firstTree) {
     const tree = forestryStatus.firstTree;
-    const statusClass = tree.status === 'ready' ? 'ready' : (tree.status === 'growing' ? 'growing' : 'empty');
-    const icon = tree.status === 'ready' ? '✅' : (tree.status === 'growing' ? '🌲' : '⬜');
+    const isReady = tree.status === 'ready' || tree.timeLeft === 'Gotowe!';
+    const statusClass = isReady ? 'ready' : (tree.status === 'growing' ? 'growing' : 'empty');
+    const icon = isReady ? '✅' : (tree.status === 'growing' ? '🌲' : '⬜');
     items.push(`
       <div class="forestry-status-item ${statusClass}">
         <span class="forestry-icon">${icon}</span>
         <span class="forestry-name">🌲 ${tree.name}</span>
-        <span class="forestry-time">${tree.timeLeft}</span>
+        <span class="tree-time ${isReady ? 'ready' : ''}">${tree.timeLeft}</span>
       </div>
     `);
   }
@@ -805,53 +1038,6 @@ async function runStalls() {
   }
 }
 
-async function runCycle() {
-  if (!selectedAccountId) return;
-  
-  showModuleStatus('Wykonuję pełny cykl...');
-  setModuleButtonsDisabled(true);
-  
-  try {
-    await api('POST', `/api/accounts/${selectedAccountId}/run-cycle`);
-    showModuleStatus('Pełny cykl - zakończono!', 'success');
-    showToast('Pełny cykl zakończony', 'success');
-    setTimeout(hideModuleStatus, 3000);
-    await loadLogs();
-  } catch (error) {
-    showModuleStatus(`Błąd: ${error.message}`, 'error');
-    showToast(error.message, 'error');
-    setTimeout(hideModuleStatus, 5000);
-  } finally {
-    setModuleButtonsDisabled(false);
-  }
-}
-
-// ============ USTAWIENIA ============
-
-async function saveSettings() {
-  if (!selectedAccountId) return;
-  
-  const settings = {
-    farm_enabled: document.getElementById('farmEnabled').checked,
-    farm_auto_harvest: document.getElementById('farmAutoHarvest').checked,
-    farm_auto_plant: document.getElementById('farmAutoPlant').checked,
-    farm_auto_water: document.getElementById('farmAutoWater').checked,
-    stalls_enabled: document.getElementById('stallsEnabled').checked,
-    stalls_auto_restock: document.getElementById('stallsAutoRestock').checked,
-    forestry_enabled: document.getElementById('forestryEnabled').checked,
-    forestry_auto_harvest: document.getElementById('forestryAutoHarvest').checked,
-    forestry_auto_plant: document.getElementById('forestryAutoPlant').checked,
-    forestry_auto_production: document.getElementById('forestryAutoProduction').checked,
-  };
-  
-  try {
-    await api('PUT', `/api/accounts/${selectedAccountId}/settings`, settings);
-    showToast('Ustawienia zapisane!', 'success');
-  } catch (error) {
-    showToast(error.message, 'error');
-  }
-}
-
 // ============ LOGI ============
 
 async function loadLogs() {
@@ -888,19 +1074,6 @@ function closeModal() {
   document.getElementById('addAccountModal').classList.add('hidden');
 }
 
-async function testLogin() {
-  if (!selectedAccountId) return;
-  
-  showToast('Testowanie logowania...', 'info');
-  
-  try {
-    await api('POST', `/api/accounts/${selectedAccountId}/test-login`);
-    showToast('Logowanie udane!', 'success');
-  } catch (error) {
-    showToast(error.message, 'error');
-  }
-}
-
 async function logout() {
   try {
     await api('POST', '/api/logout');
@@ -913,117 +1086,172 @@ async function logout() {
 // ============ HARMONOGRAM ============
 
 /**
- * Aktualizuje widoczność opcji harmonogramu w zależności od wybranego trybu
+ * Pokazuje zakładkę harmonogramu
  */
-function updateSchedulerOptions() {
-  const mode = document.getElementById('schedulerMode').value;
+function showSchedulerTab(tabName) {
+  // Usuń aktywną klasę ze wszystkich zakładek
+  document.querySelectorAll('.scheduler-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
   
-  // Ukryj wszystkie opcje
-  document.getElementById('intervalOptions').classList.add('hidden');
-  document.getElementById('smartRefreshOptions').classList.add('hidden');
-  document.getElementById('windowOptions').classList.add('hidden');
-  document.getElementById('dailyOptions').classList.add('hidden');
+  // Ukryj wszystkie panele
+  document.querySelectorAll('.scheduler-tab-panel').forEach(panel => {
+    panel.classList.add('hidden');
+    panel.classList.remove('active');
+  });
   
-  // Pokaż odpowiednie opcje
-  switch (mode) {
-    case 'interval':
-      document.getElementById('intervalOptions').classList.remove('hidden');
-      break;
-    case 'smart_refresh':
-      document.getElementById('smartRefreshOptions').classList.remove('hidden');
-      break;
-    case 'window':
-      document.getElementById('windowOptions').classList.remove('hidden');
-      break;
-    case 'daily':
-      document.getElementById('dailyOptions').classList.remove('hidden');
-      break;
+  // Aktywuj wybraną zakładkę
+  event.target.classList.add('active');
+  
+  // Pokaż wybrany panel
+  const panelId = 'schedulerTab' + tabName.charAt(0).toUpperCase() + tabName.slice(1);
+  const panel = document.getElementById(panelId);
+  if (panel) {
+    panel.classList.remove('hidden');
+    panel.classList.add('active');
   }
 }
 
 /**
- * Zapisuje konfigurację harmonogramu
+ * Uruchamia harmonogram
  */
-async function saveSchedulerConfig() {
+async function startScheduler() {
   if (!selectedAccountId) {
     showToast('Najpierw wybierz konto', 'error');
     return;
   }
   
-  const mode = document.getElementById('schedulerMode').value;
+  const farmInterval = parseInt(document.getElementById('farmInterval').value) || 0;
+  const forestryInterval = parseInt(document.getElementById('forestryInterval').value) || 0;
+  const stallsInterval = parseInt(document.getElementById('stallsInterval').value) || 0;
+  const smartMode = document.getElementById('smartModeEnabled').checked;
   
-  let config = { mode };
-  
-  switch (mode) {
-    case 'interval':
-      config.intervalMinutes = parseInt(document.getElementById('schedulerInterval').value) || 30;
-      break;
-      
-    case 'smart_refresh':
-      config.refreshMargin = parseInt(document.getElementById('refreshMargin').value) || 1;
-      break;
-      
-    case 'window':
-      config.windowStart = document.getElementById('windowStart').value || '08:00';
-      config.windowEnd = document.getElementById('windowEnd').value || '22:00';
-      config.intervalMinutes = parseInt(document.getElementById('windowInterval').value) || 30;
-      break;
-      
-    case 'daily':
-      const dailyTime = document.getElementById('dailyTime').value || '08:00';
-      const [hour, minute] = dailyTime.split(':').map(Number);
-      config.hour = hour;
-      config.minute = minute;
-      break;
+  if (farmInterval === 0 && forestryInterval === 0 && stallsInterval === 0 && !smartMode) {
+    showToast('Ustaw interwał dla co najmniej jednego modułu lub włącz tryb inteligentny', 'error');
+    return;
   }
   
   try {
-    await api('POST', `/api/scheduler/accounts/${selectedAccountId}/activate`, config);
-    showToast('Harmonogram zapisany i aktywowany!', 'success');
-    await refreshTaskQueue();
+    await api('POST', `/api/scheduler/accounts/${selectedAccountId}/activate`, {
+      farmInterval,
+      forestryInterval,
+      stallsInterval,
+      smartMode
+    });
+    showToast('Harmonogram uruchomiony!', 'success');
+    await refreshSchedulerStatus();
   } catch (error) {
     showToast(`Błąd: ${error.message}`, 'error');
   }
 }
 
 /**
- * Odświeża listę zaplanowanych zadań
+ * Zatrzymuje harmonogram
  */
-async function refreshTaskQueue() {
+async function stopScheduler() {
+  if (!selectedAccountId) {
+    showToast('Najpierw wybierz konto', 'error');
+    return;
+  }
+  
+  try {
+    await api('POST', `/api/accounts/${selectedAccountId}/stop-automation`);
+    showToast('Harmonogram zatrzymany', 'success');
+    await refreshSchedulerStatus();
+  } catch (error) {
+    showToast(`Błąd: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Odświeża status harmonogramu
+ */
+async function refreshSchedulerStatus() {
   if (!selectedAccountId) return;
   
   try {
-    const data = await api('GET', `/api/scheduler/accounts/${selectedAccountId}/queue`);
-    const container = document.getElementById('taskQueueStatus');
+    // Pobierz status schedulera (aktywne konta w pamięci)
+    const statusData = await api('GET', '/api/scheduler/status');
     
-    if (!data.queue || data.queue.length === 0) {
-      container.innerHTML = '<p class="no-data">Brak zaplanowanych zadań</p>';
-      return;
+    // Pobierz konfigurację z bazy (zapisane interwały)
+    const configData = await api('GET', `/api/scheduler/accounts/${selectedAccountId}/config`);
+    const config = configData.config || {};
+    
+    // Znajdź status dla aktualnego konta
+    const accountStatus = statusData.activeAccounts?.find(a => a.accountId === selectedAccountId);
+    
+    // Aktualizuj wskaźnik statusu
+    const statusEl = document.getElementById('schedulerActiveStatus');
+    const smartModeCheckbox = document.getElementById('smartModeEnabled');
+    
+    if (accountStatus) {
+      statusEl.innerHTML = '<span class="status-indicator active"></span><span>Aktywny</span>';
+      
+      // Wypełnij interwały z aktywnego schedulera
+      if (accountStatus.intervals) {
+        document.getElementById('farmInterval').value = accountStatus.intervals.farm || 0;
+        document.getElementById('forestryInterval').value = accountStatus.intervals.forestry || 0;
+        document.getElementById('stallsInterval').value = accountStatus.intervals.stalls || 0;
+      }
+      
+      // Smart mode z aktywnego schedulera
+      if (smartModeCheckbox) {
+        smartModeCheckbox.checked = accountStatus.smartMode || false;
+      }
+      
+      // Ostatnie uruchomienia
+      if (accountStatus.lastRun) {
+        document.getElementById('farmLastRun').textContent = 
+          accountStatus.lastRun.farm ? new Date(accountStatus.lastRun.farm).toLocaleTimeString() : '-';
+        document.getElementById('forestryLastRun').textContent = 
+          accountStatus.lastRun.forestry ? new Date(accountStatus.lastRun.forestry).toLocaleTimeString() : '-';
+        document.getElementById('stallsLastRun').textContent = 
+          accountStatus.lastRun.stalls ? new Date(accountStatus.lastRun.stalls).toLocaleTimeString() : '-';
+      }
+    } else {
+      statusEl.innerHTML = '<span class="status-indicator inactive"></span><span>Nieaktywny</span>';
+      
+      // Wypełnij interwały z bazy danych (zapisana konfiguracja)
+      document.getElementById('farmInterval').value = config.scheduler_farm_interval || 0;
+      document.getElementById('forestryInterval').value = config.scheduler_forestry_interval || 0;
+      document.getElementById('stallsInterval').value = config.scheduler_stalls_interval || 0;
+      
+      // Smart mode z bazy
+      if (smartModeCheckbox) {
+        smartModeCheckbox.checked = config.scheduler_smart_mode === 1;
+      }
+      
+      // Wyczyść ostatnie uruchomienia
+      document.getElementById('farmLastRun').textContent = '-';
+      document.getElementById('forestryLastRun').textContent = '-';
+      document.getElementById('stallsLastRun').textContent = '-';
     }
     
-    container.innerHTML = data.queue.map(task => {
-      const executeAt = new Date(task.executeAt);
-      const isNow = executeAt <= new Date();
-      const statusIcon = task.status === 'running' ? '🔄' : 
-                         task.status === 'completed' ? '✅' : 
-                         task.status === 'failed' ? '❌' : 
-                         isNow ? '⏰' : '📅';
-      
-      return `
-        <div class="task-queue-item ${task.status}">
-          <span class="task-icon">${statusIcon}</span>
-          <span class="task-type">${formatTaskType(task.type)}</span>
-          <span class="task-mode">${formatScheduleMode(task.mode)}</span>
-          <span class="task-time">${formatTaskTime(executeAt)}</span>
-          <span class="task-priority">${formatPriority(task.priority)}</span>
-        </div>
-      `;
-    }).join('');
+    // Aktualizuj kolejkę
+    document.getElementById('queueCount').textContent = statusData.queueLength || 0;
+    
+    // Aktualizuj aktualne zadanie
+    const currentTaskEl = document.getElementById('currentTaskInfo');
+    if (statusData.currentTask) {
+      currentTaskEl.classList.remove('hidden');
+      document.getElementById('currentTaskName').textContent = 
+        statusData.currentTask.moduleType === 'farm' ? '🌾 Farma' :
+        statusData.currentTask.moduleType === 'forestry' ? '🌲 Tartak' :
+        statusData.currentTask.moduleType === 'stalls' ? '🏪 Stragany' : statusData.currentTask.moduleType;
+    } else {
+      currentTaskEl.classList.add('hidden');
+    }
+    
   } catch (error) {
-    console.error('Błąd pobierania kolejki:', error);
-    document.getElementById('taskQueueStatus').innerHTML = 
-      '<p class="no-data">Błąd pobierania kolejki</p>';
+    console.error('Błąd pobierania statusu harmonogramu:', error);
   }
+}
+
+/**
+ * Odświeża listę zaplanowanych zadań (dla kompatybilności)
+ */
+async function refreshTaskQueue() {
+  await refreshSchedulerStatus();
 }
 
 /**

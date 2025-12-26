@@ -25,9 +25,6 @@ export class GameAuth {
       await this.session.page.goto(config.gameUrl, { waitUntil: 'domcontentloaded' });
       await this.session.waitForPageReady();
       
-      // Zrób screenshot przed logowaniem (debug)
-      await this.session.screenshot('before_login');
-      
       // Znajdź i wypełnij formularz logowania
       // Najpierw wybierz serwer
       const serverSelect = await this.session.page.$('#loginserver, select[name="server"]');
@@ -53,8 +50,6 @@ export class GameAuth {
         this.account.password
       );
 
-      await this.session.screenshot('before_submit');
-
       // Kliknij przycisk logowania
       const submitClicked = await this.session.safeClick(
         '#loginbutton, input[type="submit"]'
@@ -77,18 +72,15 @@ export class GameAuth {
         this.log.info('Zalogowano pomyślnie!');
         updateLastLogin(this.account.id);
         logAction(this.account.id, 'login', 'Pomyślne logowanie', true);
-        await this.session.screenshot('after_login');
         return true;
       } else {
         this.log.error('Logowanie nie powiodło się');
-        await this.session.screenshot('login_failed');
         logAction(this.account.id, 'login', 'Nieudane logowanie', false);
         return false;
       }
       
     } catch (error) {
       this.log.error(`Błąd podczas logowania: ${error.message}`, error);
-      await this.session.screenshot('login_error');
       logAction(this.account.id, 'login', `Błąd: ${error.message}`, false);
       return false;
     }

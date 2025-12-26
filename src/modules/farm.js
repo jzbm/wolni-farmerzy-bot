@@ -756,20 +756,26 @@ export class FarmModule {
   /**
    * Podlewa pola w aktualnym budynku
    * Używa #waterall (span.waterall) - "Podlej wszystko"
+   * Wzorowane na harvestInCurrentBuilding które działa poprawnie
    */
   async waterInCurrentBuilding() {
     const page = this.session.page;
     
-    // Najpierw włącz tryb podlewania klikając #giessen
+    this.log.info('Rozpoczynam podlewanie...');
+    
+    // Najpierw włącz tryb podlewania klikając #giessen (tak jak #ernten dla zbierania)
     try {
       const waterMode = await page.$('#giessen');
       if (waterMode) {
         await waterMode.click();
         await this.session.randomDelay(300, 500);
+        this.log.debug('Włączono tryb podlewania (#giessen)');
       }
-    } catch (e) {}
+    } catch (e) {
+      this.log.debug(`Nie znaleziono #giessen: ${e.message}`);
+    }
     
-    // Kliknij "Podlej wszystko" - #waterall
+    // Kliknij "Podlej wszystko" - #waterall (tak samo jak #cropall dla zbierania)
     let watered = false;
     try {
       const waterAllBtn = await page.$('#waterall');
@@ -780,7 +786,7 @@ export class FarmModule {
         watered = true;
       }
     } catch (e) {
-      this.log.debug(`Błąd podlewania: ${e.message}`);
+      this.log.debug(`Błąd podlewania #waterall: ${e.message}`);
     }
     
     // Alternatywne selektory jeśli #waterall nie zadziałał
@@ -788,7 +794,6 @@ export class FarmModule {
       const waterSelectors = [
         '.waterall',
         'span.waterall',
-        '#tooltipwaterall',
       ];
       
       for (const selector of waterSelectors) {
@@ -797,6 +802,7 @@ export class FarmModule {
           if (btn && await btn.isVisible()) {
             await btn.click();
             await this.session.randomDelay(1000, 2000);
+            this.log.info(`Użyto alternatywne podlewanie (${selector})`);
             watered = true;
             break;
           }
@@ -808,13 +814,18 @@ export class FarmModule {
     if (watered) {
       await this.session.randomDelay(500, 1000);
       try {
-        const confirmBtn = await page.$('#globalbox_button1');
-        if (confirmBtn && await confirmBtn.isVisible()) {
-          await confirmBtn.click();
-          this.log.debug('Zaakceptowano powiadomienie po podlewaniu (#globalbox_button1)');
-          await this.session.randomDelay(300, 500);
+        const globalbox = await page.$('#globalbox');
+        if (globalbox && await globalbox.isVisible()) {
+          const confirmBtn = await page.$('#globalbox_button1');
+          if (confirmBtn && await confirmBtn.isVisible()) {
+            await confirmBtn.click();
+            this.log.debug('Zaakceptowano powiadomienie po podlewaniu (#globalbox_button1)');
+            await this.session.randomDelay(300, 500);
+          }
         }
       } catch (e) {}
+    } else {
+      this.log.warn('Nie udało się podlać - nie znaleziono przycisku podlewania');
     }
     
     return watered ? 1 : 0;
@@ -838,7 +849,8 @@ export class FarmModule {
     let farmConfig = null;
     if (!cropType) {
       try {
-        farmConfig = getFarmConfig(this.account.id);
+        const configStr = getFarmConfig(this.account.id);
+        farmConfig = configStr ? JSON.parse(configStr) : null;
         this.log.info(`Załadowano konfigurację farmy: ${JSON.stringify(farmConfig)}`);
       } catch (e) {
         this.log.warn(`Nie udało się pobrać konfiguracji farmy, używam domyślnej (zboże): ${e.message}`);
@@ -911,14 +923,17 @@ export class FarmModule {
         }
         
         // Sadzenie - tylko jeśli status był 'empty', 'ready' (po zebraniu) lub nieznany
+        let planted = 0;
         if (plant && (!status || status.status === 'empty' || status.status === 'ready' || status.status === 'unknown')) {
-          const p = await this.plantInCurrentBuilding(farmCrop);
-          results.planted += p;
-          if (p > 0) this.log.info(`Posadzono ${p} roślin`);
+          planted = await this.plantInCurrentBuilding(farmCrop);
+          results.planted += planted;
+          if (planted > 0) this.log.info(`Posadzono ${planted} roślin`);
         }
         
-        // Podlewanie (po sadzeniu)
-        if (water) {
+        // Podlewanie - TYLKO jeśli posadzono rośliny w tym budynku
+        this.log.info(`DEBUG podlewanie: water=${water}, planted=${planted}`);
+        if (water && planted > 0) {
+          this.log.info('Wywołuję waterInCurrentBuilding()...');
           const w = await this.waterInCurrentBuilding();
           results.watered += w;
           if (w > 0) this.log.info(`Podlano ${w} pól`);
@@ -987,12 +1002,17 @@ export class FarmModule {
               // Parsuj czas jeśli nie gotowe
               let timeLeft = null;
               if (!isReady) {
+                // Próbuj różne formaty czasu
                 const timeMatch = cleanText.match(/(\d{1,2}):(\d{2}):(\d{2})/);
                 if (timeMatch) {
                   const hours = parseInt(timeMatch[1]);
                   const minutes = parseInt(timeMatch[2]);
                   const seconds = parseInt(timeMatch[3]);
-                  timeLeft = `${hours}h ${minutes}m`;
+                  // Zwróć w formacie HH:MM:SS dla timerów na frontendzie
+                  timeLeft = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                } else {
+                  // Użyj surowego tekstu jako fallback
+                  timeLeft = cleanText;
                 }
               }
               
@@ -1000,7 +1020,7 @@ export class FarmModule {
                 farm: farmNum,
                 field: fieldNum,
                 status: isReady ? 'ready' : 'growing',
-                timeLeft: isReady ? 'Gotowe!' : timeLeft,
+                timeLeft: isReady ? 'Gotowe!' : (timeLeft || cleanText),
                 plantType: plantType,
                 raw: cleanText,
               });

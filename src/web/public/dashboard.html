@@ -41,7 +41,6 @@
         <div class="account-header">
           <h2 id="accountEmail">-</h2>
           <div class="account-actions">
-            <button onclick="testLogin()" class="btn btn-secondary btn-small">Test logowania</button>
             <button onclick="refreshGameStatus()" class="btn btn-info btn-small">🔄 Odśwież status</button>
           </div>
         </div>
@@ -51,7 +50,6 @@
           <button onclick="runFarm()" class="btn btn-module btn-farm">🌾 Farma</button>
           <button onclick="runForestry()" class="btn btn-module btn-forestry">🌲 Tartak</button>
           <button onclick="runStalls()" class="btn btn-module btn-stalls">🏪 Stragany</button>
-          <button onclick="runCycle()" class="btn btn-module btn-cycle">🔄 Pełny cykl</button>
         </div>
         
         <!-- Status wykonania -->
@@ -247,157 +245,101 @@
         <!-- HARMONOGRAM -->
         <div class="config-panel">
           <h3>📅 Harmonogram automatyzacji</h3>
-          <p class="config-info">Skonfiguruj kiedy i jak często bot ma wykonywać akcje.</p>
+          <p class="config-info">Ustaw interwał dla każdego modułu. Wartość 0 = moduł wyłączony z harmonogramu.</p>
           
-          <div class="scheduler-config">
-            <!-- Tryb pracy -->
-            <div class="scheduler-mode-select">
-              <h4>⚙️ Tryb pracy</h4>
+          <!-- Zakładki -->
+          <div class="scheduler-tabs">
+            <button class="scheduler-tab active" onclick="showSchedulerTab('farm')">🌾 Farma</button>
+            <button class="scheduler-tab" onclick="showSchedulerTab('forestry')">🌲 Tartak</button>
+            <button class="scheduler-tab" onclick="showSchedulerTab('stalls')">🏪 Stragany</button>
+          </div>
+          
+          <!-- Zawartość zakładek -->
+          <div class="scheduler-tab-content">
+            <!-- Farma -->
+            <div id="schedulerTabFarm" class="scheduler-tab-panel active">
+              <h4>🌾 Moduł Farmy</h4>
+              <p class="option-info">Zbiera plony, sadzi rośliny i podlewa.</p>
               <div class="slot-config">
-                <label>Tryb harmonogramu:</label>
-                <select id="schedulerMode" onchange="updateSchedulerOptions()">
-                  <option value="interval">Interwałowy (co X minut)</option>
-                  <option value="smart_refresh">Inteligentny (przed końcem czasu)</option>
-                  <option value="window">Okno czasowe (np. 8:00-22:00)</option>
-                  <option value="daily">Dzienny (raz dziennie)</option>
-                </select>
-              </div>
-            </div>
-            
-            <!-- Opcje interwału -->
-            <div id="intervalOptions" class="scheduler-options">
-              <h4>⏱️ Interwał</h4>
-              <div class="slot-config">
-                <label>Sprawdzaj co:</label>
+                <label>Uruchamiaj co:</label>
                 <div class="input-with-unit">
-                  <input type="number" id="schedulerInterval" min="5" max="240" value="30">
-                  <span>minut</span>
+                  <input type="number" id="farmInterval" min="0" max="240" value="0">
+                  <span>minut (0 = wyłączony)</span>
                 </div>
               </div>
+              <div class="module-last-run">
+                <span>Ostatnie uruchomienie: </span>
+                <span id="farmLastRun">-</span>
+              </div>
             </div>
             
-            <!-- Opcje smart refresh -->
-            <div id="smartRefreshOptions" class="scheduler-options hidden">
-              <h4>🧠 Inteligentne odświeżanie</h4>
-              <p class="option-info">Bot automatycznie zaplanuje akcję chwilę przed zakończeniem wzrostu rośliny/drzewa/produkcji.</p>
+            <!-- Tartak -->
+            <div id="schedulerTabForestry" class="scheduler-tab-panel hidden">
+              <h4>🌲 Moduł Tartaku</h4>
+              <p class="option-info">Zbiera drzewa, sadzi nowe i uruchamia produkcję.</p>
               <div class="slot-config">
-                <label>Margines przed końcem:</label>
+                <label>Uruchamiaj co:</label>
                 <div class="input-with-unit">
-                  <input type="number" id="refreshMargin" min="1" max="10" value="1">
-                  <span>minut</span>
+                  <input type="number" id="forestryInterval" min="0" max="240" value="0">
+                  <span>minut (0 = wyłączony)</span>
                 </div>
               </div>
+              <div class="module-last-run">
+                <span>Ostatnie uruchomienie: </span>
+                <span id="forestryLastRun">-</span>
+              </div>
             </div>
             
-            <!-- Opcje okna czasowego -->
-            <div id="windowOptions" class="scheduler-options hidden">
-              <h4>🕐 Okno czasowe</h4>
-              <p class="option-info">Bot będzie aktywny tylko w określonych godzinach.</p>
+            <!-- Stragany -->
+            <div id="schedulerTabStalls" class="scheduler-tab-panel hidden">
+              <h4>🏪 Moduł Straganów</h4>
+              <p class="option-info">Uzupełnia produkty na straganach.</p>
               <div class="slot-config">
-                <label>Od godziny:</label>
-                <input type="time" id="windowStart" value="08:00">
-              </div>
-              <div class="slot-config">
-                <label>Do godziny:</label>
-                <input type="time" id="windowEnd" value="22:00">
-              </div>
-              <div class="slot-config">
-                <label>Interwał w oknie:</label>
+                <label>Uruchamiaj co:</label>
                 <div class="input-with-unit">
-                  <input type="number" id="windowInterval" min="5" max="120" value="30">
-                  <span>minut</span>
+                  <input type="number" id="stallsInterval" min="0" max="240" value="0">
+                  <span>minut (0 = wyłączony)</span>
                 </div>
               </div>
-            </div>
-            
-            <!-- Opcje dzienne -->
-            <div id="dailyOptions" class="scheduler-options hidden">
-              <h4>📆 Zadanie dzienne</h4>
-              <p class="option-info">Bot wykona pełny cykl raz dziennie o określonej godzinie.</p>
-              <div class="slot-config">
-                <label>Godzina:</label>
-                <input type="time" id="dailyTime" value="08:00">
+              <div class="module-last-run">
+                <span>Ostatnie uruchomienie: </span>
+                <span id="stallsLastRun">-</span>
               </div>
             </div>
-            
-            <!-- Status kolejki -->
-            <div class="scheduler-queue-status">
-              <h4>📋 Kolejka zadań</h4>
-              <div id="taskQueueStatus" class="task-queue-list">
-                <p class="no-data">Brak zaplanowanych zadań</p>
-              </div>
+          </div>
+          
+          <!-- Tryb inteligentny -->
+          <div class="smart-mode-box">
+            <h4>🧠 Tryb inteligentny</h4>
+            <p class="option-info">Analizuje status gry i automatycznie uruchamia moduły gdy coś jest gotowe do zbioru (na podstawie cache statusu).</p>
+            <label class="checkbox-label">
+              <input type="checkbox" id="smartModeEnabled">
+              <span>Włącz tryb inteligentny</span>
+            </label>
+          </div>
+          
+          <!-- Status harmonogramu -->
+          <div class="scheduler-status-box">
+            <h4>📊 Status harmonogramu</h4>
+            <div id="schedulerActiveStatus">
+              <span class="status-indicator inactive"></span>
+              <span>Nieaktywny</span>
+            </div>
+            <div id="schedulerQueueStatus" class="queue-info">
+              <span>Kolejka: </span>
+              <span id="queueCount">0</span>
+              <span> zadań</span>
+            </div>
+            <div id="currentTaskInfo" class="current-task hidden">
+              <span>⏳ Aktualnie: </span>
+              <span id="currentTaskName">-</span>
             </div>
           </div>
           
           <div class="scheduler-actions">
-            <button onclick="saveSchedulerConfig()" class="btn btn-primary">💾 Zapisz harmonogram</button>
-            <button onclick="refreshTaskQueue()" class="btn btn-secondary">🔄 Odśwież kolejkę</button>
+            <button onclick="startScheduler()" class="btn btn-success">▶️ Uruchom harmonogram</button>
+            <button onclick="stopScheduler()" class="btn btn-danger">⏹️ Zatrzymaj</button>
           </div>
-        </div>
-        
-        <!-- USTAWIENIA MODUŁÓW -->
-        <div class="config-panel">
-          <h3>🔧 Ustawienia modułów</h3>
-          <form id="settingsForm" class="settings-form-compact">
-            <div class="modules-grid">
-              <!-- Farma -->
-              <div class="module-config-card">
-                <h4>🌾 Farma</h4>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="farmEnabled" name="farm_enabled">
-                  <span>Włączona</span>
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="farmAutoHarvest" name="farm_auto_harvest">
-                  <span>Auto zbiór</span>
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="farmAutoPlant" name="farm_auto_plant">
-                  <span>Auto sadzenie</span>
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="farmAutoWater" name="farm_auto_water">
-                  <span>Auto podlewanie</span>
-                </label>
-              </div>
-              
-              <!-- Stragany -->
-              <div class="module-config-card">
-                <h4>🏪 Stragany</h4>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="stallsEnabled" name="stalls_enabled">
-                  <span>Włączone</span>
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="stallsAutoRestock" name="stalls_auto_restock">
-                  <span>Auto uzupełnianie</span>
-                </label>
-              </div>
-              
-              <!-- Tartak -->
-              <div class="module-config-card">
-                <h4>🌲 Tartak</h4>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="forestryEnabled" name="forestry_enabled">
-                  <span>Włączony</span>
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="forestryAutoHarvest" name="forestry_auto_harvest">
-                  <span>Auto zbiór</span>
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="forestryAutoPlant" name="forestry_auto_plant">
-                  <span>Auto sadzenie</span>
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="forestryAutoProduction" name="forestry_auto_production">
-                  <span>Auto produkcja</span>
-                </label>
-              </div>
-            </div>
-            
-            <button type="submit" class="btn btn-primary">💾 Zapisz ustawienia</button>
-          </form>
         </div>
         
         <!-- LOGI -->

@@ -455,34 +455,24 @@ class AdvancedScheduler {
 
     state.isActive = true;
 
-    // Dodaj zadania początkowe w zależności od opcji
+    // Konfiguracja interwału
     const mode = options.mode || ScheduleMode.INTERVAL;
     const interval = (options.intervalMinutes || account.check_interval_minutes || 30) * 60 * 1000;
 
-    // Zadanie sprawdzania statusu (niski priorytet, częste)
-    this.scheduleTask({
-      accountId,
-      type: TaskType.STATUS_CHECK,
-      mode: ScheduleMode.INTERVAL,
-      priority: Priority.LOW,
-      interval: Math.min(interval, 5 * 60 * 1000), // Max co 5 min
-      data: { checkAll: true }
-    });
-
-    // Główne zadanie cyklu
+    // Tylko jedno główne zadanie cyklu - bez oddzielnego status_check
     this.scheduleTask({
       accountId,
       type: TaskType.FULL_CYCLE,
       mode: mode,
       priority: Priority.NORMAL,
       interval: interval,
-      executeAt: new Date(), // Wykonaj od razu
+      executeAt: new Date(Date.now() + interval), // Następne wykonanie za interval
       data: options.data || {}
     });
 
-    // Uruchom pierwszy cykl
+    // Uruchom pierwszy cykl natychmiast (sekwencyjnie, nie jako osobne zadanie)
     try {
-      await this.runFullCycle(accountId);
+      await this.runSequentialCycle(accountId);
     } catch (error) {
       logger.error(`Błąd pierwszego cyklu dla ${account.email}: ${error.message}`);
     }
@@ -722,11 +712,13 @@ class AdvancedScheduler {
 
       switch (task.type) {
         case TaskType.FULL_CYCLE:
-          result = await this.runFullCycle(task.accountId);
+          result = await this.runSequentialCycle(task.accountId);
           break;
 
         case TaskType.STATUS_CHECK:
-          result = await this.checkAccountStatus(task.accountId);
+          // Status check jest teraz częścią runSequentialCycle, nie wykonuj oddzielnie
+          logger.info(`ℹ️ STATUS_CHECK pominięty - status jest sprawdzany w ramach FULL_CYCLE`);
+          result = { skipped: true };
           break;
 
         case TaskType.FARM_HARVEST:
@@ -963,7 +955,147 @@ class AdvancedScheduler {
   /**
    * Uruchamia pełny cykl dla konta
    */
+  async runSequentialCycle(accountId) {
+    const account = getGameAccount(accountId);
+    if (!account) {
+      throw new Error(`Nie znaleziono konta ${accountId}`);
+    }
+
+    logger.info(`🔄 Sekwencyjny cykl dla ${account.email}...`);
+
+    let session = null;
+
+    try {
+      // 1. Uruchom przeglądarkę i zaloguj
+      session = await browserManager.getSession(account.email);
+      const auth = new GameAuth(session, account);
+      const loggedIn = await auth.ensureLoggedIn();
+      if (!loggedIn) {
+        throw new Error('Nie udało się zalogować');
+      }
+
+      const results = {
+        status: null,
+        farm: null,
+        forestry: null,
+        stalls: null,
+      };
+
+      // 2. SPRAWDZENIE STATUSU (opcjonalne logowanie)
+      logger.info('📊 Sprawdzanie statusu...');
+      try {
+        if (account.farm_enabled) {
+          const farm = new FarmModule(session, account);
+          const fieldsStatus = await farm.getAllFieldsStatus();
+          results.status = { fields: fieldsStatus };
+          logger.info(`📊 Pola: ${fieldsStatus.length} aktywnych upraw`);
+        }
+      } catch (e) {
+        logger.warn(`Błąd sprawdzania statusu: ${e.message}`);
+      }
+
+      // 3. MODUŁ FARMY
+      if (account.farm_enabled) {
+        logger.info('🌾 Uruchamiam moduł farmy...');
+        try {
+          const farm = new FarmModule(session, account);
+          results.farm = await farm.fullFarmCycle({
+            farms: [1, 2, 3, 4],
+            harvest: true,
+            plant: true,
+            water: true,
+          });
+          logger.info('✅ Farma zakończona');
+        } catch (e) {
+          logger.error(`❌ Błąd farmy: ${e.message}`);
+          results.farm = { error: e.message };
+        }
+      }
+
+      // 4. MODUŁ TARTAKU
+      if (account.forestry_enabled) {
+        logger.info('🌲 Uruchamiam moduł tartaku...');
+        try {
+          const forestry = new ForestryModule(session, account);
+          
+          const buildingConfigStr = getForestryBuildingConfig(accountId);
+          const buildingConfig = buildingConfigStr ? JSON.parse(buildingConfigStr) : null;
+          
+          const treeNameToId = {
+            'swierk': 1, 'świerk': 1,
+            'brzoza': 2,
+            'buk': 3,
+            'topola': 4,
+            'kasztan': 5,
+            'dab': 7, 'dąb': 7,
+            'jesion': 8,
+            'klon': 9,
+            'wierzba': 10,
+          };
+          const preferredTreeName = account.forestry_preferred_tree || 'swierk';
+          const preferredTreeId = treeNameToId[preferredTreeName.toLowerCase()] || 1;
+          
+          results.forestry = await forestry.fullForestryCycle({
+            harvestTrees: true,
+            plantTrees: true,
+            waterTrees: true,
+            preferredTreeId: preferredTreeId,
+            manageBuildings: true,
+            buildingConfig: buildingConfig,
+          });
+          logger.info('✅ Tartak zakończony');
+        } catch (e) {
+          logger.error(`❌ Błąd tartaku: ${e.message}`);
+          results.forestry = { error: e.message };
+        }
+      }
+
+      // 5. MODUŁ STRAGANÓW
+      if (account.stalls_enabled) {
+        logger.info('🏪 Uruchamiam moduł straganów...');
+        try {
+          const stalls = new StallsModule(session, account);
+          results.stalls = await stalls.runCycle();
+          logger.info('✅ Stragany zakończone');
+        } catch (e) {
+          logger.error(`❌ Błąd straganów: ${e.message}`);
+          results.stalls = { error: e.message };
+        }
+      }
+
+      // 6. Zamknij przeglądarkę NA KOŃCU
+      await browserManager.closeSession(account.email);
+      FarmModule.resetCropSelection();
+
+      logAction(accountId, 'sequential_cycle', JSON.stringify(results), true);
+      logger.info(`✅ Cykl zakończony dla ${account.email}`);
+      
+      return results;
+
+    } catch (error) {
+      logger.error(`❌ Błąd cyklu: ${error.message}`);
+      logAction(accountId, 'sequential_cycle', `Błąd: ${error.message}`, false);
+      
+      try {
+        await browserManager.closeSession(account.email);
+      } catch (e) {}
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Uruchamia pełny cykl dla konta (stara metoda - do usunięcia w przyszłości)
+   */
   async runFullCycle(accountId) {
+    // Przekieruj do nowej sekwencyjnej metody
+    return this.runSequentialCycle(accountId);
+  }
+
+  /**
+   * STARA METODA runFullCycle - zachowana dla kompatybilności
+   */
+  async runFullCycleOld(accountId) {
     const account = getGameAccount(accountId);
     if (!account) {
       throw new Error(`Nie znaleziono konta ${accountId}`);
@@ -995,12 +1127,13 @@ class AdvancedScheduler {
         logger.info('🌾 Moduł farmy...');
         const farm = new FarmModule(session, account);
         
-        // cropType = null -> fullFarmCycle pobierze konfigurację per farma z bazy danych
+        // Zawsze wykonuj wszystkie akcje (harvest, plant, water)
+        // cropType = null -> pobierze konfigurację per farma z bazy danych
         results.farm = await farm.fullFarmCycle({
           farms: [1, 2, 3, 4],
-          harvest: account.farm_auto_harvest,
-          plant: account.farm_auto_plant,
-          water: account.farm_auto_water,
+          harvest: true,
+          plant: true,
+          water: true,
         });
 
         // Zapisz czasy gotowości
@@ -1034,12 +1167,13 @@ class AdvancedScheduler {
         const preferredTreeName = account.forestry_preferred_tree || 'swierk';
         const preferredTreeId = treeNameToId[preferredTreeName.toLowerCase()] || 1;
         
+        // Zawsze wykonuj wszystkie akcje
         results.forestry = await forestry.fullForestryCycle({
-          harvestTrees: account.forestry_auto_harvest,
-          plantTrees: account.forestry_auto_plant,
-          waterTrees: account.forestry_auto_water,
+          harvestTrees: true,
+          plantTrees: true,
+          waterTrees: true,
           preferredTreeId: preferredTreeId,
-          manageBuildings: account.forestry_auto_production,
+          manageBuildings: true,
           buildingConfig: buildingConfig,
         });
 
@@ -1053,7 +1187,7 @@ class AdvancedScheduler {
       }
 
       // STRAGANY
-      if (account.stalls_enabled && account.stalls_auto_restock) {
+      if (account.stalls_enabled) {
         logger.info('🏪 Moduł straganów...');
         const stalls = new StallsModule(session, account);
         results.stalls = await stalls.runCycle();

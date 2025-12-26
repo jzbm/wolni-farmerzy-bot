@@ -171,6 +171,31 @@ export function initDatabase() {
     // Kolumna już istnieje - ignoruj
   }
   
+  // Migracja: dodaj kolumny interwałów harmonogramu
+  try {
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN scheduler_farm_interval INTEGER DEFAULT 0`);
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN scheduler_forestry_interval INTEGER DEFAULT 0`);
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN scheduler_stalls_interval INTEGER DEFAULT 0`);
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN scheduler_smart_mode BOOLEAN DEFAULT 0`);
+    logger.info('Dodano kolumny harmonogramu');
+  } catch (e) {
+    // Kolumny już istnieją - ignoruj
+  }
+  
+  // Tabela cache statusu gry
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS game_status_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      fields_status TEXT,
+      stalls_status TEXT,
+      forestry_status TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES game_accounts(id) ON DELETE CASCADE,
+      UNIQUE(account_id)
+    )
+  `);
+  
   logger.info('Baza danych zainicjalizowana');
 }
 
@@ -475,6 +500,80 @@ export function updateFarmConfig(accountId, config) {
   logger.info('SQL:', sql, 'Values:', [configStr, accountId]);
   const stmt = db.prepare(sql);
   return stmt.run(configStr, accountId);
+}
+
+// ============ KONFIGURACJA HARMONOGRAMU ============
+
+export function getSchedulerConfig(accountId) {
+  const stmt = db.prepare(`
+    SELECT 
+      scheduler_farm_interval,
+      scheduler_forestry_interval,
+      scheduler_stalls_interval,
+      scheduler_smart_mode
+    FROM automation_settings WHERE account_id = ?
+  `);
+  const result = stmt.get(accountId);
+  return result || {
+    scheduler_farm_interval: 0,
+    scheduler_forestry_interval: 0,
+    scheduler_stalls_interval: 0,
+    scheduler_smart_mode: 0
+  };
+}
+
+export function updateSchedulerConfig(accountId, config) {
+  const stmt = db.prepare(`
+    UPDATE automation_settings SET 
+      scheduler_farm_interval = ?,
+      scheduler_forestry_interval = ?,
+      scheduler_stalls_interval = ?,
+      scheduler_smart_mode = ?
+    WHERE account_id = ?
+  `);
+  return stmt.run(
+    config.farmInterval || 0,
+    config.forestryInterval || 0,
+    config.stallsInterval || 0,
+    config.smartMode ? 1 : 0,
+    accountId
+  );
+}
+
+// ============ CACHE STATUSU GRY ============
+
+export function saveGameStatusCache(accountId, status) {
+  const stmt = db.prepare(`
+    INSERT INTO game_status_cache (account_id, fields_status, stalls_status, forestry_status, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(account_id) DO UPDATE SET
+      fields_status = excluded.fields_status,
+      stalls_status = excluded.stalls_status,
+      forestry_status = excluded.forestry_status,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+  return stmt.run(
+    accountId,
+    JSON.stringify(status.fieldsStatus || null),
+    JSON.stringify(status.stallsStatus || null),
+    JSON.stringify(status.forestryStatus || null)
+  );
+}
+
+export function getGameStatusCache(accountId) {
+  const stmt = db.prepare(`
+    SELECT fields_status, stalls_status, forestry_status, updated_at
+    FROM game_status_cache WHERE account_id = ?
+  `);
+  const result = stmt.get(accountId);
+  if (!result) return null;
+  
+  return {
+    fieldsStatus: result.fields_status ? JSON.parse(result.fields_status) : null,
+    stallsStatus: result.stalls_status ? JSON.parse(result.stalls_status) : null,
+    forestryStatus: result.forestry_status ? JSON.parse(result.forestry_status) : null,
+    updatedAt: result.updated_at
+  };
 }
 
 // ============ CZASY ROŚLIN ============

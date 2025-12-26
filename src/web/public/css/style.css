@@ -1289,6 +1289,13 @@ body {
   height: 16px;
 }
 
+.module-config-card .module-desc {
+  font-size: 11px;
+  color: #666;
+  margin: 8px 0 0 0;
+  font-style: italic;
+}
+
 /* Kompaktowe logi */
 .logs-list-compact {
   max-height: 300px;
@@ -1349,44 +1356,133 @@ body {
    HARMONOGRAM / SCHEDULER
    ======================================== */
 
-.scheduler-config {
+/* Zakładki harmonogramu */
+.scheduler-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  gap: 5px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
 }
 
-.scheduler-mode-select {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: var(--radius);
+.scheduler-tab {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
 }
 
-.scheduler-mode-select h4 {
-  margin-bottom: 10px;
-  color: var(--dark);
+.scheduler-tab:hover {
+  color: var(--primary);
+  background: rgba(76, 175, 80, 0.05);
 }
 
-.scheduler-options {
+.scheduler-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* Zawartość zakładek */
+.scheduler-tab-content {
+  margin-bottom: 20px;
+}
+
+.scheduler-tab-panel {
   background: #fff;
-  padding: 15px;
+  padding: 20px;
   border-radius: var(--radius);
   border: 1px solid #e0e0e0;
 }
 
-.scheduler-options h4 {
+.scheduler-tab-panel.hidden {
+  display: none;
+}
+
+.scheduler-tab-panel h4 {
   margin-bottom: 8px;
   color: var(--primary-dark);
 }
 
-.scheduler-options.hidden {
-  display: none;
-}
-
-.option-info {
+.scheduler-tab-panel .option-info {
   font-size: 12px;
   color: var(--gray);
-  margin-bottom: 12px;
+  margin-bottom: 15px;
   line-height: 1.4;
+}
+
+.module-last-run {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+  font-size: 13px;
+  color: var(--gray);
+}
+
+.module-last-run span:last-child {
+  font-weight: 500;
+  color: var(--dark);
+}
+
+/* Status harmonogramu */
+.scheduler-status-box {
+  background: #f0f7ff;
+  padding: 15px;
+  border-radius: var(--radius);
+  border: 1px solid #cce5ff;
+  margin-bottom: 15px;
+}
+
+.scheduler-status-box h4 {
+  margin-bottom: 12px;
+  color: #004085;
+  font-size: 14px;
+}
+
+#schedulerActiveStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.status-indicator.active {
+  background: var(--success);
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.inactive {
+  background: var(--gray);
+}
+
+.queue-info {
+  font-size: 13px;
+  color: var(--dark);
+  margin-bottom: 8px;
+}
+
+.queue-info span:nth-child(2) {
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+.current-task {
+  padding: 10px;
+  background: #fff3cd;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.current-task.hidden {
+  display: none;
 }
 
 .input-with-unit {
@@ -1408,84 +1504,28 @@ body {
   font-size: 14px;
 }
 
-.scheduler-queue-status {
-  background: #f0f7ff;
-  padding: 15px;
-  border-radius: var(--radius);
-  border: 1px solid #cce5ff;
-}
-
-.scheduler-queue-status h4 {
-  margin-bottom: 12px;
-  color: #004085;
-}
-
-.task-queue-list {
-  max-height: 250px;
-  overflow-y: auto;
-}
-
-.task-queue-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: white;
-  border-radius: 6px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-
-.task-queue-item:last-child {
-  margin-bottom: 0;
-}
-
-.task-queue-item .task-icon {
-  font-size: 16px;
-}
-
-.task-queue-item .task-type {
-  flex: 2;
-  font-weight: 500;
-}
-
-.task-queue-item .task-mode {
-  flex: 1;
-  font-size: 11px;
-  color: var(--gray);
-}
-
-.task-queue-item .task-time {
-  flex: 1;
-  font-size: 12px;
-  color: var(--secondary);
-  font-weight: 500;
-}
-
-.task-queue-item .task-priority {
-  font-size: 11px;
-}
-
-.task-queue-item.running {
-  background: #fff3cd;
-  border-left: 3px solid #ffc107;
-}
-
-.task-queue-item.completed {
-  background: #d4edda;
-  border-left: 3px solid var(--success);
-}
-
-.task-queue-item.failed {
-  background: #f8d7da;
-  border-left: 3px solid var(--danger);
-}
-
 .scheduler-actions {
   display: flex;
   gap: 10px;
   margin-top: 15px;
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success:hover {
+  background: #43a047;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #e53935;
 }
 
 /* Status schedulera w sidebarze */
@@ -1533,4 +1573,42 @@ input[type="time"] {
 input[type="time"]:focus {
   outline: none;
   border-color: var(--primary);
+}
+
+/* Smart Mode Box */
+.smart-mode-box {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  padding: 15px;
+  border-radius: var(--radius);
+  border: 1px solid #ffcc80;
+  margin-bottom: 20px;
+}
+
+.smart-mode-box h4 {
+  margin-bottom: 8px;
+  color: #e65100;
+  font-size: 15px;
+}
+
+.smart-mode-box .option-info {
+  font-size: 12px;
+  color: #bf360c;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.smart-mode-box .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.smart-mode-box .checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #e65100;
 }
