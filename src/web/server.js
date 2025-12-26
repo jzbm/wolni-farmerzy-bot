@@ -31,7 +31,13 @@ import {
   updateFarmConfig,
   getSchedulerConfig,
   updateSchedulerConfig,
-  saveGameStatusCache
+  saveGameStatusCache,
+  getAllAppSettings,
+  setAppSetting,
+  isHeadlessMode,
+  setHeadlessMode,
+  getActiveSchedulerConfigs,
+  setSchedulerActive
 } from '../database.js';
 import { scheduler, ModuleType } from '../simple-scheduler.js';
 import { browserManager } from '../browser.js';
@@ -441,6 +447,10 @@ app.post('/api/accounts/:id/stop-automation', requireAuth, async (req, res) => {
     }
     
     await scheduler.deactivateAccount(parseInt(id));
+    
+    // Zapisz że harmonogram jest nieaktywny
+    setSchedulerActive(parseInt(id), false);
+    
     res.json({ success: true, message: 'Automatyzacja zatrzymana' });
   } catch (error) {
     res.status(500).json({ error: `Błąd: ${error.message}` });
@@ -707,12 +717,13 @@ app.post('/api/scheduler/accounts/:id/activate', requireAuth, async (req, res) =
   const { farmInterval, forestryInterval, stallsInterval, smartMode } = req.body;
   
   try {
-    // Zapisz konfigurację do bazy
+    // Zapisz konfigurację do bazy (z active=true)
     updateSchedulerConfig(parseInt(id), {
       farmInterval: farmInterval || 0,
       forestryInterval: forestryInterval || 0,
       stallsInterval: stallsInterval || 0,
-      smartMode: smartMode || false
+      smartMode: smartMode || false,
+      active: true
     });
     
     // Aktywuj w schedulerze
@@ -745,6 +756,43 @@ app.post('/api/scheduler/accounts/:id/run-module', requireAuth, async (req, res)
   }
 });
 
+// ============ USTAWIENIA APLIKACJI ============
+
+// Pobierz wszystkie ustawienia aplikacji
+app.get('/api/settings', requireAuth, (req, res) => {
+  try {
+    const settings = getAllAppSettings();
+    res.json({ 
+      headlessMode: settings.headless_mode === 'true',
+      browserTimeout: parseInt(settings.browser_timeout) || 30000
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Zaktualizuj ustawienia aplikacji
+app.post('/api/settings', requireAuth, (req, res) => {
+  try {
+    const { headlessMode, browserTimeout } = req.body;
+    
+    if (typeof headlessMode === 'boolean') {
+      setHeadlessMode(headlessMode);
+    }
+    
+    if (browserTimeout) {
+      setAppSetting('browser_timeout', String(browserTimeout));
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Ustawienia zapisane. Zmiany zostaną zastosowane przy następnym uruchomieniu przeglądarki.' 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ WEBSOCKET ============
 
 io.on('connection', (socket) => {
@@ -766,16 +814,53 @@ export function sendUpdate(accountId, type, data) {
 
 // ============ START SERWERA ============
 
-export function startServer() {
+export async function startServer() {
   // Inicjalizuj bazę danych
   initDatabase();
   
   // Uruchom scheduler
   scheduler.start();
   
+  // Reaktywuj zapisane harmonogramy
+  await reactivateSavedSchedulers();
+  
   httpServer.listen(config.port, () => {
     logger.info(`Serwer webowy uruchomiony na http://localhost:${config.port}`);
   });
+}
+
+/**
+ * Reaktywuje harmonogramy które były aktywne przed restartem
+ */
+async function reactivateSavedSchedulers() {
+  try {
+    const activeConfigs = getActiveSchedulerConfigs();
+    
+    if (activeConfigs.length === 0) {
+      logger.info('Brak zapisanych aktywnych harmonogramów do reaktywacji');
+      return;
+    }
+    
+    logger.info(`Reaktywacja ${activeConfigs.length} zapisanych harmonogramów...`);
+    
+    for (const config of activeConfigs) {
+      try {
+        await scheduler.activateAccount(config.account_id, {
+          farmInterval: config.scheduler_farm_interval,
+          forestryInterval: config.scheduler_forestry_interval,
+          stallsInterval: config.scheduler_stalls_interval,
+          smartMode: config.scheduler_smart_mode === 1
+        });
+        logger.info(`✅ Reaktywowano harmonogram dla: ${config.email}`);
+      } catch (error) {
+        logger.error(`❌ Błąd reaktywacji dla ${config.email}: ${error.message}`);
+      }
+    }
+    
+    logger.info('Reaktywacja harmonogramów zakończona');
+  } catch (error) {
+    logger.error(`Błąd podczas reaktywacji harmonogramów: ${error.message}`);
+  }
 }
 
 export default app;

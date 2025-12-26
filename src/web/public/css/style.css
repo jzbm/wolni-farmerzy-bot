@@ -1612,3 +1612,32 @@ input[type="time"]:focus {
   cursor: pointer;
   accent-color: #e65100;
 }
+
+/* Settings Box w Sidebar */
+.settings-box {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.settings-box .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.settings-box .checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.settings-box .option-hint {
+  font-size: 11px;
+  color: var(--gray);
+  margin-top: 5px;
+  line-height: 1.3;
+}

@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import { config } from './config.js';
 import logger, { createAccountLogger } from './logger.js';
 import { mkdirSync, existsSync } from 'fs';
+import { isHeadlessMode } from './database.js';
 
 // Upewnij się że folder screenshots istnieje
 if (!existsSync(config.screenshotsDir)) {
@@ -30,8 +31,12 @@ export class BrowserSession {
   async launch() {
     this.log.info('Uruchamianie przeglądarki...');
     
+    // Pobierz tryb headless z bazy danych (domyślnie true)
+    const headless = isHeadlessMode();
+    this.log.info(`Tryb headless: ${headless}`);
+    
     this.browser = await chromium.launch({
-      headless: config.headless,
+      headless: headless,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--no-sandbox',

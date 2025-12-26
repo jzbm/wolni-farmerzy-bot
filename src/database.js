@@ -182,6 +182,14 @@ export function initDatabase() {
     // Kolumny już istnieją - ignoruj
   }
   
+  // Migracja: dodaj kolumnę scheduler_active
+  try {
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN scheduler_active BOOLEAN DEFAULT 0`);
+    logger.info('Dodano kolumnę scheduler_active');
+  } catch (e) {
+    // Kolumna już istnieje - ignoruj
+  }
+  
   // Tabela cache statusu gry
   db.exec(`
     CREATE TABLE IF NOT EXISTS game_status_cache (
@@ -195,8 +203,64 @@ export function initDatabase() {
       UNIQUE(account_id)
     )
   `);
+
+  // Tabela ustawień globalnych aplikacji
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Domyślne ustawienia globalne
+  const defaultSettings = [
+    ['headless_mode', 'true'],
+    ['browser_timeout', '30000'],
+  ];
+
+  const insertSetting = db.prepare(`INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)`);
+  for (const [key, value] of defaultSettings) {
+    insertSetting.run(key, value);
+  }
   
   logger.info('Baza danych zainicjalizowana');
+}
+
+// ============ USTAWIENIA GLOBALNE APLIKACJI ============
+
+export function getAppSetting(key) {
+  const stmt = db.prepare('SELECT value FROM app_settings WHERE key = ?');
+  const row = stmt.get(key);
+  return row ? row.value : null;
+}
+
+export function setAppSetting(key, value) {
+  const stmt = db.prepare(`
+    INSERT INTO app_settings (key, value, updated_at) 
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
+  `);
+  return stmt.run(key, value, value);
+}
+
+export function getAllAppSettings() {
+  const stmt = db.prepare('SELECT key, value FROM app_settings');
+  const rows = stmt.all();
+  const settings = {};
+  for (const row of rows) {
+    settings[row.key] = row.value;
+  }
+  return settings;
+}
+
+export function isHeadlessMode() {
+  const value = getAppSetting('headless_mode');
+  return value === 'true';
+}
+
+export function setHeadlessMode(enabled) {
+  return setAppSetting('headless_mode', enabled ? 'true' : 'false');
 }
 
 // ============ UŻYTKOWNICY APLIKACJI ============
@@ -510,7 +574,8 @@ export function getSchedulerConfig(accountId) {
       scheduler_farm_interval,
       scheduler_forestry_interval,
       scheduler_stalls_interval,
-      scheduler_smart_mode
+      scheduler_smart_mode,
+      scheduler_active
     FROM automation_settings WHERE account_id = ?
   `);
   const result = stmt.get(accountId);
@@ -518,7 +583,8 @@ export function getSchedulerConfig(accountId) {
     scheduler_farm_interval: 0,
     scheduler_forestry_interval: 0,
     scheduler_stalls_interval: 0,
-    scheduler_smart_mode: 0
+    scheduler_smart_mode: 0,
+    scheduler_active: 0
   };
 }
 
@@ -528,7 +594,8 @@ export function updateSchedulerConfig(accountId, config) {
       scheduler_farm_interval = ?,
       scheduler_forestry_interval = ?,
       scheduler_stalls_interval = ?,
-      scheduler_smart_mode = ?
+      scheduler_smart_mode = ?,
+      scheduler_active = ?
     WHERE account_id = ?
   `);
   return stmt.run(
@@ -536,8 +603,38 @@ export function updateSchedulerConfig(accountId, config) {
     config.forestryInterval || 0,
     config.stallsInterval || 0,
     config.smartMode ? 1 : 0,
+    config.active !== undefined ? (config.active ? 1 : 0) : 1,
     accountId
   );
+}
+
+export function setSchedulerActive(accountId, active) {
+  const stmt = db.prepare(`
+    UPDATE automation_settings SET scheduler_active = ? WHERE account_id = ?
+  `);
+  return stmt.run(active ? 1 : 0, accountId);
+}
+
+export function getActiveSchedulerConfigs() {
+  const stmt = db.prepare(`
+    SELECT 
+      ga.id as account_id,
+      ga.email,
+      asm.scheduler_farm_interval,
+      asm.scheduler_forestry_interval,
+      asm.scheduler_stalls_interval,
+      asm.scheduler_smart_mode
+    FROM game_accounts ga
+    JOIN automation_settings asm ON ga.id = asm.account_id
+    WHERE asm.scheduler_active = 1
+    AND (
+      asm.scheduler_farm_interval > 0 
+      OR asm.scheduler_forestry_interval > 0 
+      OR asm.scheduler_stalls_interval > 0
+      OR asm.scheduler_smart_mode = 1
+    )
+  `);
+  return stmt.all();
 }
 
 // ============ CACHE STATUSU GRY ============

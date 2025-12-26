@@ -1360,3 +1360,43 @@ async function loadSchedulerStatus() {
 
 // Odświeżaj status schedulera co 30 sekund
 setInterval(loadSchedulerStatus, 30000);
+
+// ============ USTAWIENIA APLIKACJI ============
+
+/**
+ * Ładuje ustawienia aplikacji
+ */
+async function loadAppSettings() {
+  try {
+    const data = await api('GET', '/api/settings');
+    const headlessToggle = document.getElementById('headlessModeToggle');
+    if (headlessToggle) {
+      headlessToggle.checked = data.headlessMode;
+    }
+  } catch (error) {
+    console.error('Błąd ładowania ustawień:', error);
+  }
+}
+
+/**
+ * Przełącza tryb headless
+ */
+async function toggleHeadlessMode() {
+  const headlessToggle = document.getElementById('headlessModeToggle');
+  const enabled = headlessToggle.checked;
+  
+  try {
+    await api('POST', '/api/settings', { headlessMode: enabled });
+    showToast(enabled ? 
+      'Tryb headless włączony - przeglądarka będzie niewidoczna' : 
+      'Tryb headless wyłączony - przeglądarka będzie widoczna', 
+      'success'
+    );
+  } catch (error) {
+    showToast('Błąd zapisu ustawień', 'error');
+    headlessToggle.checked = !enabled; // Przywróć poprzednią wartość
+  }
+}
+
+// Załaduj ustawienia przy starcie
+document.addEventListener('DOMContentLoaded', loadAppSettings);

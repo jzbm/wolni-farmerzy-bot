@@ -21,7 +21,7 @@ export const config = {
   sessionSecret: process.env.APP_SECRET || 'zmien-to-na-produkcji',
   
   // Przeglądarka
-  headless: process.env.HEADLESS === 'true',
+  headless: process.env.HEADLESS !== 'false', // Domyślnie true
   
   // Gra
   gameUrl: 'https://wolnifarmerzy.pl',
