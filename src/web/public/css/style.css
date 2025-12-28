@@ -681,6 +681,38 @@ body {
   font-weight: normal;
 }
 
+/* Player info badges */
+.player-info-badge {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 15px 0;
+}
+
+.player-info-badge .badge {
+  font-size: 0.85em;
+  padding: 4px 10px;
+}
+
+.badge.bg-primary {
+  background: #2196F3;
+  color: white;
+}
+
+.badge.bg-warning {
+  background: #ffc107;
+  color: #000;
+}
+
+.badge.bg-success {
+  background: #4CAF50;
+  color: white;
+}
+
+.badge.text-dark {
+  color: #000 !important;
+}
+
 .form-row {
   margin-bottom: 10px;
 }
@@ -868,44 +900,43 @@ body {
 /* Toast */
 .toast-container {
   position: fixed;
-  bottom: 20px;
+  top: 20px;
   right: 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  z-index: 1001;
+  z-index: 9999;
+  pointer-events: none;
 }
 
 .toast {
   padding: 15px 25px;
   border-radius: var(--radius);
-  color: var(--white);
+  color: white;
   font-weight: 500;
-  animation: slideIn 0.3s ease;
-  box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+  transform: translateX(120%);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  pointer-events: auto;
+  max-width: 350px;
+}
+
+.toast.show {
+  transform: translateX(0);
+  opacity: 1;
 }
 
 .toast.success {
-  background: var(--success);
+  background: #28a745;
 }
 
 .toast.error {
-  background: var(--danger);
+  background: #dc3545;
 }
 
 .toast.info {
-  background: var(--secondary);
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  background: #17a2b8;
 }
 
 /* Responsive */
@@ -1037,50 +1068,53 @@ body {
   padding-top: 10px;
 }
 
-/* Status pól */
+/* Status pól - kompaktowe kafelki */
 .fields-status-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 8px;
 }
 
 .field-status-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 15px;
-  padding: 10px 15px;
+  justify-content: center;
+  padding: 10px 8px;
   background: white;
-  border-radius: 6px;
-  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  border: 2px solid #e0e0e0;
+  text-align: center;
+  min-height: 80px;
 }
 
 .field-status-item.ready {
-  background: #e8f5e9;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
   border-color: #4caf50;
 }
 
 .field-status-item.growing {
-  background: #fff8e1;
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
   border-color: #ffc107;
 }
 
 .field-status-item .field-location {
-  font-weight: 600;
-  color: #333;
-  min-width: 140px;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 4px;
 }
 
 .field-status-item .field-plant {
-  flex: 1;
-  font-weight: 500;
-  color: var(--gray);
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+  margin-bottom: 4px;
 }
 
 .field-status-item .field-time {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 14px;
   color: #ff9800;
-  min-width: 80px;
-  text-align: right;
 }
 
 .field-status-item .field-time.ready {
@@ -1504,6 +1538,43 @@ body {
   font-size: 14px;
 }
 
+.scheduler-stats-box {
+  background: #f0f9ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 15px;
+}
+
+.scheduler-stats-box h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: var(--dark);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--gray);
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dark);
+}
+
 .scheduler-actions {
   display: flex;
   gap: 10px;
@@ -1640,4 +1711,53 @@ input[type="time"]:focus {
   color: var(--gray);
   margin-top: 5px;
   line-height: 1.3;
+}
+
+/* Farm config cards */
+.farm-config {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 15px;
+  margin: 15px 0;
+}
+
+.farm-config-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 15px;
+  box-shadow: var(--shadow);
+  transition: all 0.3s;
+}
+
+.farm-config-card.locked {
+  opacity: 0.5;
+  background: #f0f0f0;
+  pointer-events: none;
+}
+
+.farm-config-card.locked::after {
+  content: '🔒 Zablokowana';
+  display: block;
+  text-align: center;
+  color: var(--gray);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.farm-config-card h4 {
+  margin-bottom: 10px;
+  color: var(--dark);
+}
+
+.farm-config-card .slot-config {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.farm-config-card select {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  font-size: 14px;
 }

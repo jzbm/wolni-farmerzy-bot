@@ -857,15 +857,19 @@ class AdvancedScheduler {
         throw new Error('Nie udało się zalogować');
       }
 
+      // Pobierz informacje o graczu
+      const playerInfo = await auth.getPlayerInfo();
+
       const status = {
         farm: null,
         forestry: null,
-        readyItems: []
+        readyItems: [],
+        playerInfo: playerInfo
       };
 
       // Sprawdź farmę
       if (account.farm_enabled) {
-        const farm = new FarmModule(session, account);
+        const farm = new FarmModule(session, account, playerInfo);
         await farm.navigateToFarm();
         status.farm = await farm.getFieldsStatus();
         
@@ -974,19 +978,32 @@ class AdvancedScheduler {
         throw new Error('Nie udało się zalogować');
       }
 
+      // Pobierz informacje o graczu (premium, pieniądze)
+      const playerInfo = await auth.getPlayerInfo();
+      
+      // Pobierz informacje o odblokowanych funkcjach z mapy
+      const unlockedFeatures = await auth.getUnlockedFeatures();
+      logger.info(`🔓 Odblokowane: Farmy=${Object.entries(unlockedFeatures.farms).filter(([k,v])=>v).map(([k])=>k).join(',')}, Stragany=${unlockedFeatures.stalls}, Tartak=${unlockedFeatures.forestry}`);
+
       const results = {
         status: null,
         farm: null,
         forestry: null,
         stalls: null,
+        playerInfo: playerInfo,
+        unlockedFeatures: unlockedFeatures
       };
 
       // 2. SPRAWDZENIE STATUSU (opcjonalne logowanie)
       logger.info('📊 Sprawdzanie statusu...');
       try {
         if (account.farm_enabled) {
-          const farm = new FarmModule(session, account);
-          const fieldsStatus = await farm.getAllFieldsStatus();
+          const farm = new FarmModule(session, account, playerInfo);
+          // Pobierz status tylko dla odblokowanych farm
+          const unlockedFarmNumbers = Object.entries(unlockedFeatures.farms)
+            .filter(([num, unlocked]) => unlocked)
+            .map(([num]) => parseInt(num));
+          const fieldsStatus = await farm.getAllFieldsStatus(unlockedFarmNumbers);
           results.status = { fields: fieldsStatus };
           logger.info(`📊 Pola: ${fieldsStatus.length} aktywnych upraw`);
         }
@@ -998,9 +1015,13 @@ class AdvancedScheduler {
       if (account.farm_enabled) {
         logger.info('🌾 Uruchamiam moduł farmy...');
         try {
-          const farm = new FarmModule(session, account);
+          const farm = new FarmModule(session, account, playerInfo);
+          // Uruchom cykl tylko dla odblokowanych farm
+          const unlockedFarmNumbers = Object.entries(unlockedFeatures.farms)
+            .filter(([num, unlocked]) => unlocked)
+            .map(([num]) => parseInt(num));
           results.farm = await farm.fullFarmCycle({
-            farms: [1, 2, 3, 4],
+            farms: unlockedFarmNumbers.length > 0 ? unlockedFarmNumbers : null,
             harvest: true,
             plant: true,
             water: true,
@@ -1012,8 +1033,8 @@ class AdvancedScheduler {
         }
       }
 
-      // 4. MODUŁ TARTAKU
-      if (account.forestry_enabled) {
+      // 4. MODUŁ TARTAKU - tylko jeśli odblokowany
+      if (account.forestry_enabled && unlockedFeatures.forestry) {
         logger.info('🌲 Uruchamiam moduł tartaku...');
         try {
           const forestry = new ForestryModule(session, account);
@@ -1048,10 +1069,13 @@ class AdvancedScheduler {
           logger.error(`❌ Błąd tartaku: ${e.message}`);
           results.forestry = { error: e.message };
         }
+      } else if (account.forestry_enabled && !unlockedFeatures.forestry) {
+        logger.info('🌲 Tartak włączony ale jeszcze nieodblokowany w grze - pomijam');
+        results.forestry = { skipped: 'Nieodblokowany w grze' };
       }
 
-      // 5. MODUŁ STRAGANÓW
-      if (account.stalls_enabled) {
+      // 5. MODUŁ STRAGANÓW - tylko jeśli odblokowane
+      if (account.stalls_enabled && unlockedFeatures.stalls) {
         logger.info('🏪 Uruchamiam moduł straganów...');
         try {
           const stalls = new StallsModule(session, account);
@@ -1061,6 +1085,9 @@ class AdvancedScheduler {
           logger.error(`❌ Błąd straganów: ${e.message}`);
           results.stalls = { error: e.message };
         }
+      } else if (account.stalls_enabled && !unlockedFeatures.stalls) {
+        logger.info('🏪 Stragany włączone ale jeszcze nieodblokowane w grze - pomijam');
+        results.stalls = { skipped: 'Nieodblokowane w grze' };
       }
 
       // 6. Zamknij przeglądarkę NA KOŃCU
@@ -1115,17 +1142,21 @@ class AdvancedScheduler {
         throw new Error('Nie udało się zalogować');
       }
 
+      // Pobierz informacje o graczu (premium, pieniądze)
+      const playerInfo = await auth.getPlayerInfo();
+
       const results = {
         farm: null,
         forestry: null,
         stalls: null,
-        readyTimes: []
+        readyTimes: [],
+        playerInfo: playerInfo
       };
 
       // FARMA
       if (account.farm_enabled) {
         logger.info('🌾 Moduł farmy...');
-        const farm = new FarmModule(session, account);
+        const farm = new FarmModule(session, account, playerInfo);
         
         // Zawsze wykonuj wszystkie akcje (harvest, plant, water)
         // cropType = null -> pobierze konfigurację per farma z bazy danych
@@ -1236,7 +1267,10 @@ class AdvancedScheduler {
       const auth = new GameAuth(session, account);
       await auth.ensureLoggedIn();
 
-      const farm = new FarmModule(session, account);
+      // Pobierz informacje o graczu
+      const playerInfo = await auth.getPlayerInfo();
+
+      const farm = new FarmModule(session, account, playerInfo);
       await farm.navigateToFarm();
       
       const result = await farm.harvestAllFields();
@@ -1262,7 +1296,10 @@ class AdvancedScheduler {
       const auth = new GameAuth(session, account);
       await auth.ensureLoggedIn();
 
-      const farm = new FarmModule(session, account);
+      // Pobierz informacje o graczu
+      const playerInfo = await auth.getPlayerInfo();
+
+      const farm = new FarmModule(session, account, playerInfo);
       await farm.navigateToFarm();
       
       const cropType = data.cropType || JSON.parse(account.farm_preferred_plants || '["pszenica"]')[0];

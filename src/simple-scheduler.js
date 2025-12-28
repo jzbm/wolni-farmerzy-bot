@@ -23,6 +23,21 @@ import {
 } from './database.js';
 import logger from './logger.js';
 
+// Funkcje do wysyłania powiadomień (będą zaimportowane z serwera)
+let emitModuleStarted = null;
+let emitModuleCompleted = null;
+let emitModuleError = null;
+
+/**
+ * Ustawia funkcje emitowania powiadomień (wywoływane z serwera)
+ */
+export function setNotificationEmitters(startedFn, completedFn, errorFn) {
+  emitModuleStarted = startedFn;
+  emitModuleCompleted = completedFn;
+  emitModuleError = errorFn;
+  logger.info('📢 Emittery powiadomień skonfigurowane');
+}
+
 /**
  * Typy modułów
  */
@@ -44,6 +59,45 @@ class SimpleScheduler {
     this.currentTask = null; // Aktualnie wykonywane zadanie
     this.queueInterval = null; // Interwał przetwarzania kolejki
     this.smartModeInterval = null; // Interwał sprawdzania smart mode
+    this.stats = new Map(); // accountId -> { farm: {success, error, lastSuccess, lastError}, ... }
+  }
+
+  /**
+   * Inicjalizuje statystyki dla konta
+   */
+  initAccountStats(accountId) {
+    if (!this.stats.has(accountId)) {
+      this.stats.set(accountId, {
+        farm: { success: 0, error: 0, lastSuccess: null, lastError: null },
+        forestry: { success: 0, error: 0, lastSuccess: null, lastError: null },
+        stalls: { success: 0, error: 0, lastSuccess: null, lastError: null },
+      });
+    }
+  }
+
+  /**
+   * Aktualizuje statystyki po wykonaniu zadania
+   */
+  updateStats(accountId, moduleType, success) {
+    this.initAccountStats(accountId);
+    const accountStats = this.stats.get(accountId);
+    if (accountStats && accountStats[moduleType]) {
+      if (success) {
+        accountStats[moduleType].success++;
+        accountStats[moduleType].lastSuccess = new Date();
+      } else {
+        accountStats[moduleType].error++;
+        accountStats[moduleType].lastError = new Date();
+      }
+    }
+  }
+
+  /**
+   * Pobiera statystyki dla konta
+   */
+  getAccountStats(accountId) {
+    this.initAccountStats(accountId);
+    return this.stats.get(accountId);
   }
 
   /**
@@ -125,6 +179,7 @@ class SimpleScheduler {
     const forestryIntervalMs = (options.forestryInterval || 0) * 60 * 1000;
     const stallsIntervalMs = (options.stallsInterval || 0) * 60 * 1000;
     const smartMode = options.smartMode || false;
+    const cacheInterval = options.cacheInterval || 60; // sekundy
 
     // Utwórz harmonogram dla konta
     const schedule = {
@@ -137,6 +192,7 @@ class SimpleScheduler {
         stalls: options.stallsInterval || 0,
       },
       smartMode: smartMode,
+      cacheInterval: cacheInterval,
       lastRun: {},
       lastSmartCheck: {},
     };
@@ -172,7 +228,7 @@ class SimpleScheduler {
 
     // Smart mode
     if (smartMode) {
-      logger.info(`  🧠 Tryb inteligentny: WŁĄCZONY`);
+      logger.info(`  🧠 Tryb inteligentny: WŁĄCZONY (sprawdzanie co ${cacheInterval}s)`);
       // Sprawdź natychmiast przy uruchomieniu
       setTimeout(() => this.checkSmartModeForAccount(accountId), 2000);
     }
@@ -270,6 +326,11 @@ class SimpleScheduler {
     }
 
     logger.info(`▶️ Wykonuję: ${task.moduleType} dla ${account.email}`);
+    
+    // Wyślij powiadomienie o rozpoczęciu
+    if (emitModuleStarted) {
+      emitModuleStarted(task.accountId, account.email, task.moduleType, `Uruchamiam moduł ${task.moduleType}`);
+    }
 
     try {
       // Pobierz lub utwórz sesję przeglądarki
@@ -283,16 +344,34 @@ class SimpleScheduler {
         throw new Error('Nie udało się zalogować');
       }
 
+      // Pobierz informacje o graczu (premium, pieniądze)
+      const playerInfo = await auth.getPlayerInfo();
+      
+      // Pobierz informacje o odblokowaniu funkcji (farmy, stragany, tartak)
+      const unlockedFeatures = await auth.getUnlockedFeatures();
+
       // Wykonaj odpowiedni moduł
       let result;
       switch (task.moduleType) {
         case ModuleType.FARM:
-          result = await this.executeFarmModule(session, account);
+          result = await this.executeFarmModule(session, account, playerInfo, unlockedFeatures);
           break;
         case ModuleType.FORESTRY:
+          // Sprawdź czy tartak jest odblokowany
+          if (!unlockedFeatures.forestry) {
+            logger.info('Tartak jest zablokowany, pomijam moduł');
+            result = { skipped: true, reason: 'locked' };
+            break;
+          }
           result = await this.executeForestryModule(session, account);
           break;
         case ModuleType.STALLS:
+          // Sprawdź czy stragany są odblokowane
+          if (!unlockedFeatures.stalls) {
+            logger.info('Stragany są zablokowane, pomijam moduł');
+            result = { skipped: true, reason: 'locked' };
+            break;
+          }
           result = await this.executeStallsModule(session, account);
           break;
       }
@@ -305,6 +384,14 @@ class SimpleScheduler {
 
       logger.info(`✅ Zakończono: ${task.moduleType} dla ${account.email}`);
       logAction(task.accountId, task.moduleType, JSON.stringify(result || {}), true);
+      
+      // Wyślij powiadomienie o zakończeniu
+      if (emitModuleCompleted) {
+        emitModuleCompleted(task.accountId, account.email, task.moduleType, result);
+      }
+      
+      // Aktualizuj statystyki - sukces
+      this.updateStats(task.accountId, task.moduleType, true);
 
       // Zamknij przeglądarkę po każdym module
       await browserManager.closeSession(account.email);
@@ -312,6 +399,14 @@ class SimpleScheduler {
     } catch (error) {
       logger.error(`❌ Błąd ${task.moduleType} dla ${account.email}: ${error.message}`);
       logAction(task.accountId, task.moduleType, `Błąd: ${error.message}`, false);
+      
+      // Wyślij powiadomienie o błędzie
+      if (emitModuleError) {
+        emitModuleError(task.accountId, account.email, task.moduleType, error.message);
+      }
+      
+      // Aktualizuj statystyki - błąd
+      this.updateStats(task.accountId, task.moduleType, false);
       
       // Przy błędzie też zamknij przeglądarkę
       try {
@@ -331,12 +426,22 @@ class SimpleScheduler {
   /**
    * Wykonuje moduł farmy
    */
-  async executeFarmModule(session, account) {
+  async executeFarmModule(session, account, playerInfo = null, unlockedFeatures = null) {
     logger.info('🌾 Moduł farmy...');
     
-    const farm = new FarmModule(session, account);
+    // Określ które farmy są odblokowane
+    let unlockedFarms = [1]; // Farma 1 zawsze dostępna
+    
+    if (unlockedFeatures && unlockedFeatures.farms) {
+      unlockedFarms = Object.entries(unlockedFeatures.farms)
+        .filter(([key, unlocked]) => unlocked)
+        .map(([key]) => parseInt(key));
+      logger.info(`Odblokowane farmy: ${unlockedFarms.join(', ')}`);
+    }
+    
+    const farm = new FarmModule(session, account, playerInfo);
     const result = await farm.fullFarmCycle({
-      farms: [1, 2, 3, 4],
+      farms: unlockedFarms,
       harvest: true,
       plant: true,
       water: true,
@@ -398,13 +503,24 @@ class SimpleScheduler {
 
   /**
    * Sprawdza smart mode dla wszystkich aktywnych kont
+   * Używa per-account cache interval zamiast globalnego
    */
   checkSmartMode() {
     if (!this.isRunning) return;
     
+    const now = Date.now();
+    
     for (const [accountId, schedule] of this.activeAccounts) {
       if (schedule.smartMode) {
-        this.checkSmartModeForAccount(accountId);
+        // Użyj per-account cache interval (w sekundach)
+        const intervalMs = (schedule.cacheInterval || 60) * 1000;
+        const lastCheck = schedule.lastSmartCheck?.timestamp || 0;
+        
+        if (now - lastCheck >= intervalMs) {
+          schedule.lastSmartCheck = schedule.lastSmartCheck || {};
+          schedule.lastSmartCheck.timestamp = now;
+          this.checkSmartModeForAccount(accountId);
+        }
       }
     }
   }
@@ -535,6 +651,7 @@ class SimpleScheduler {
           stalls: !!schedule.intervals.stalls,
         },
         lastRun: schedule.lastRun,
+        stats: this.getAccountStats(accountId),
       });
     }
 

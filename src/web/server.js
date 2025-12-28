@@ -32,6 +32,7 @@ import {
   getSchedulerConfig,
   updateSchedulerConfig,
   saveGameStatusCache,
+  getGameStatusCache,
   getAllAppSettings,
   setAppSetting,
   isHeadlessMode,
@@ -39,7 +40,7 @@ import {
   getActiveSchedulerConfigs,
   setSchedulerActive
 } from '../database.js';
-import { scheduler, ModuleType } from '../simple-scheduler.js';
+import { scheduler, ModuleType, setNotificationEmitters } from '../simple-scheduler.js';
 import { browserManager } from '../browser.js';
 import { GameAuth } from '../modules/auth.js';
 import { FarmModule } from '../modules/farm.js';
@@ -160,6 +161,28 @@ app.get('/api/accounts', requireAuth, (req, res) => {
   }
 });
 
+// Pobierz pojedyncze konto
+app.get('/api/accounts/:id', requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const account = getGameAccount(id);
+    
+    if (!account || account.app_user_id !== req.session.userId) {
+      return res.status(404).json({ error: 'Konto nie znalezione' });
+    }
+    
+    // Ukryj hasło
+    const safeAccount = {
+      ...account,
+      password: '********'
+    };
+    
+    res.json({ account: safeAccount });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania konta' });
+  }
+});
+
 app.post('/api/accounts', requireAuth, async (req, res) => {
   try {
     const { email, password, server } = req.body;
@@ -270,8 +293,11 @@ app.post('/api/accounts/:id/run-farm', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Nie udało się zalogować' });
     }
     
+    // Pobierz informacje o graczu (premium, pieniądze)
+    const playerInfo = await auth.getPlayerInfo();
+    
     const { FarmModule } = await import('../modules/farm.js');
-    const farm = new FarmModule(session, account);
+    const farm = new FarmModule(session, account, playerInfo);
     
     // cropType = null -> fullFarmCycle pobierze konfigurację per farma z bazy danych
     const results = await farm.fullFarmCycle({
@@ -285,7 +311,7 @@ app.post('/api/accounts/:id/run-farm', requireAuth, async (req, res) => {
     await browserManager.closeSession(account.email);
     FarmModule.resetCropSelection();
     
-    res.json({ success: true, results });
+    res.json({ success: true, results, playerInfo });
   } catch (error) {
     try {
       const account = getGameAccount(req.params.id);
@@ -599,26 +625,41 @@ app.get('/api/accounts/:id/game-status', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Nie udało się zalogować' });
     }
     
-    // Pobierz status straganów
-    const { StallsModule } = await import('../modules/stalls.js');
-    const stalls = new StallsModule(session, account);
-    const stallsStatus = await stalls.getAllStallsStatus();
+    // Pobierz informacje o graczu (poziom, pieniądze)
+    const playerInfo = await auth.getPlayerInfo();
     
-    // Pobierz live status pól z gry
-    const farm = new FarmModule(session, account);
-    const fieldsStatus = await farm.getAllFieldsStatus();
+    // Pobierz informacje o odblokowanych funkcjach z mapy
+    const unlockedFeatures = await auth.getUnlockedFeatures();
     
-    // Pobierz status tartaku
-    const { ForestryModule } = await import('../modules/forestry.js');
-    const forestry = new ForestryModule(session, account);
-    const forestryStatus = await forestry.getForestryStatus();
+    // Pobierz status straganów tylko jeśli odblokowane
+    let stallsStatus = [];
+    if (unlockedFeatures.stalls) {
+      const { StallsModule } = await import('../modules/stalls.js');
+      const stalls = new StallsModule(session, account);
+      stallsStatus = await stalls.getAllStallsStatus();
+    }
+    
+    // Pobierz live status pól z gry - tylko dla odblokowanych farm
+    const farm = new FarmModule(session, account, playerInfo);
+    const unlockedFarmNumbers = Object.entries(unlockedFeatures.farms)
+      .filter(([num, unlocked]) => unlocked)
+      .map(([num]) => parseInt(num));
+    const fieldsStatus = await farm.getAllFieldsStatus(unlockedFarmNumbers);
+    
+    // Pobierz status tartaku tylko jeśli odblokowany
+    let forestryStatus = { trees: [], building1: null, building2: null };
+    if (unlockedFeatures.forestry) {
+      const { ForestryModule } = await import('../modules/forestry.js');
+      const forestry = new ForestryModule(session, account);
+      forestryStatus = await forestry.getForestryStatus();
+    }
     
     // Zamknij przeglądarkę
     await browserManager.closeSession(account.email);
     
     // Zapisz do cache w bazie danych (dla smart mode)
     try {
-      saveGameStatusCache(parseInt(id), { fieldsStatus, stallsStatus, forestryStatus });
+      saveGameStatusCache(parseInt(id), { fieldsStatus, stallsStatus, forestryStatus, playerInfo, unlockedFeatures });
     } catch (e) {
       console.error('Błąd zapisu cache statusu:', e);
     }
@@ -627,6 +668,8 @@ app.get('/api/accounts/:id/game-status', requireAuth, async (req, res) => {
       stallsStatus,
       fieldsStatus,
       forestryStatus,
+      playerInfo,
+      unlockedFeatures,
       fetchedAt: new Date().toISOString()
     });
   } catch (error) {
@@ -635,6 +678,35 @@ app.get('/api/accounts/:id/game-status', requireAuth, async (req, res) => {
       if (account) await browserManager.closeSession(account.email);
     } catch (e) {}
     res.status(500).json({ error: `Błąd: ${error.message}` });
+  }
+});
+
+// Pobierz cache statusu gry z bazy (bez uruchamiania przeglądarki)
+app.get('/api/accounts/:id/game-status-cache', requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const account = getGameAccount(id);
+    
+    if (!account || account.app_user_id !== req.session.userId) {
+      return res.status(404).json({ error: 'Konto nie znalezione' });
+    }
+    
+    const cache = getGameStatusCache(parseInt(id));
+    
+    if (!cache) {
+      return res.status(404).json({ error: 'Brak cache' });
+    }
+    
+    res.json({
+      fieldsStatus: cache.fieldsStatus,
+      stallsStatus: cache.stallsStatus,
+      forestryStatus: cache.forestryStatus,
+      playerInfo: cache.playerInfo || { level: 1, gold: 0, cash: 0, name: '' },
+      unlockedFeatures: cache.unlockedFeatures || { farms: { 1: true, 2: false, 3: false, 4: false }, stalls: false, forestry: false },
+      updatedAt: cache.updatedAt
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -714,7 +786,7 @@ app.get('/api/scheduler/accounts/:id/config', requireAuth, (req, res) => {
 // Aktywuj konto z interwałami per moduł
 app.post('/api/scheduler/accounts/:id/activate', requireAuth, async (req, res) => {
   const { id } = req.params;
-  const { farmInterval, forestryInterval, stallsInterval, smartMode } = req.body;
+  const { farmInterval, forestryInterval, stallsInterval, smartMode, cacheInterval } = req.body;
   
   try {
     // Zapisz konfigurację do bazy (z active=true)
@@ -723,7 +795,8 @@ app.post('/api/scheduler/accounts/:id/activate', requireAuth, async (req, res) =
       forestryInterval: forestryInterval || 0,
       stallsInterval: stallsInterval || 0,
       smartMode: smartMode || false,
-      active: true
+      active: true,
+      cacheInterval: cacheInterval || 60
     });
     
     // Aktywuj w schedulerze
@@ -731,7 +804,8 @@ app.post('/api/scheduler/accounts/:id/activate', requireAuth, async (req, res) =
       farmInterval: farmInterval || 0,
       forestryInterval: forestryInterval || 0,
       stallsInterval: stallsInterval || 0,
-      smartMode: smartMode || false
+      smartMode: smartMode || false,
+      cacheInterval: cacheInterval || 60
     });
     res.json({ success: true, message: 'Konto aktywowane' });
   } catch (error) {
@@ -800,6 +874,8 @@ io.on('connection', (socket) => {
   
   socket.on('subscribe', (accountId) => {
     socket.join(`account_${accountId}`);
+    socket.join('global'); // Subskrybuj też kanał globalny
+    logger.debug(`Socket subskrybuje konto ${accountId}`);
   });
   
   socket.on('disconnect', () => {
@@ -812,11 +888,38 @@ export function sendUpdate(accountId, type, data) {
   io.to(`account_${accountId}`).emit('update', { type, data });
 }
 
+// Funkcja do wysyłania powiadomień o uruchomieniu modułu
+export function emitModuleStarted(accountId, accountEmail, module, message = null) {
+  const data = { accountId, accountEmail, module, message, timestamp: new Date().toISOString() };
+  io.to(`account_${accountId}`).emit('module_started', data);
+  io.to('global').emit('module_started', data);
+  logger.info(`📢 Powiadomienie: ${accountEmail} - moduł ${module} uruchomiony`);
+}
+
+// Funkcja do wysyłania powiadomień o zakończeniu modułu
+export function emitModuleCompleted(accountId, accountEmail, module, results = null) {
+  const data = { accountId, accountEmail, module, results, timestamp: new Date().toISOString() };
+  io.to(`account_${accountId}`).emit('module_completed', data);
+  io.to('global').emit('module_completed', data);
+  logger.info(`✅ Powiadomienie: ${accountEmail} - moduł ${module} zakończony`);
+}
+
+// Funkcja do wysyłania powiadomień o błędzie modułu
+export function emitModuleError(accountId, accountEmail, module, error) {
+  const data = { accountId, accountEmail, module, error, timestamp: new Date().toISOString() };
+  io.to(`account_${accountId}`).emit('module_error', data);
+  io.to('global').emit('module_error', data);
+  logger.error(`❌ Powiadomienie: ${accountEmail} - błąd ${module}: ${error}`);
+}
+
 // ============ START SERWERA ============
 
 export async function startServer() {
   // Inicjalizuj bazę danych
   initDatabase();
+  
+  // Skonfiguruj emittery powiadomień dla schedulera
+  setNotificationEmitters(emitModuleStarted, emitModuleCompleted, emitModuleError);
   
   // Uruchom scheduler
   scheduler.start();
@@ -849,7 +952,8 @@ async function reactivateSavedSchedulers() {
           farmInterval: config.scheduler_farm_interval,
           forestryInterval: config.scheduler_forestry_interval,
           stallsInterval: config.scheduler_stalls_interval,
-          smartMode: config.scheduler_smart_mode === 1
+          smartMode: config.scheduler_smart_mode === 1,
+          cacheInterval: config.scheduler_cache_interval || 60
         });
         logger.info(`✅ Reaktywowano harmonogram dla: ${config.email}`);
       } catch (error) {

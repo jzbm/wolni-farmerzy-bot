@@ -52,7 +52,9 @@
         <div class="account-header">
           <h2 id="accountEmail">-</h2>
           <div class="account-actions">
-            <button onclick="refreshGameStatus()" class="btn btn-info btn-small">🔄 Odśwież status</button>
+            <button onclick="refreshGameStatusFromCache()" class="btn btn-secondary btn-small" title="Szybkie odświeżenie z lokalnego cache">📋 Z cache</button>
+            <button onclick="refreshGameStatusLive()" class="btn btn-info btn-small" title="Wchodzi do gry i pobiera aktualny status">🔄 Odśwież z gry</button>
+            <button onclick="deleteAccount()" class="btn btn-danger btn-small">🗑️ Usuń konto</button>
           </div>
         </div>
         
@@ -74,7 +76,7 @@
           <h3>📊 Status gry <small id="statusFetchTime"></small></h3>
           
           <!-- Status straganów -->
-          <div class="status-section">
+          <div class="status-section" id="stallsStatusSection">
             <h4>🏪 Stragany</h4>
             <div id="stallsStatus" class="stalls-status-grid">
               <p class="no-data">Kliknij "Odśwież status" aby pobrać dane z gry</p>
@@ -90,7 +92,7 @@
           </div>
           
           <!-- Status tartaku -->
-          <div class="status-section">
+          <div class="status-section" id="forestryStatusSection">
             <h4>🪵 Tartak</h4>
             <div id="forestryStatus" class="forestry-status-grid">
               <p class="no-data">Brak danych</p>
@@ -105,7 +107,7 @@
           
           <div class="farm-config">
             <!-- Farma 1 -->
-            <div class="farm-config-card">
+            <div class="farm-config-card" id="farm1_config">
               <h4>🏠 Farma 1</h4>
               <div class="slot-config">
                 <label>Roślina:</label>
@@ -116,7 +118,7 @@
             </div>
             
             <!-- Farma 2 -->
-            <div class="farm-config-card">
+            <div class="farm-config-card" id="farm2_config">
               <h4>🏡 Farma 2</h4>
               <div class="slot-config">
                 <label>Roślina:</label>
@@ -127,7 +129,7 @@
             </div>
             
             <!-- Farma 3 -->
-            <div class="farm-config-card">
+            <div class="farm-config-card" id="farm3_config">
               <h4>🏘️ Farma 3</h4>
               <div class="slot-config">
                 <label>Roślina:</label>
@@ -138,7 +140,7 @@
             </div>
             
             <!-- Farma 4 -->
-            <div class="farm-config-card">
+            <div class="farm-config-card" id="farm4_config">
               <h4>🏰 Farma 4</h4>
               <div class="slot-config">
                 <label>Roślina:</label>
@@ -153,7 +155,7 @@
         </div>
         
         <!-- KONFIGURACJA STRAGANÓW -->
-        <div class="config-panel">
+        <div class="config-panel" id="stallsConfigPanel">
           <h3>⚙️ Konfiguracja straganów</h3>
           <p class="config-info">Wybierz produkt dla każdego slotu. W jednym straganie nie mogą być dwa takie same produkty!</p>
           
@@ -184,6 +186,12 @@
                   <option value="">-- Wyłączony --</option>
                 </select>
               </div>
+              <div class="slot-config">
+                <label>Slot 2:</label>
+                <select id="stall2_slot2" onchange="validateStallProducts(2)">
+                  <option value="">-- Wyłączony --</option>
+                </select>
+              </div>
             </div>
           </div>
           
@@ -191,7 +199,7 @@
         </div>
         
         <!-- KONFIGURACJA TARTAKU -->
-        <div class="config-panel">
+        <div class="config-panel" id="forestryConfigPanel">
           <h3>🌲 Konfiguracja tartaku</h3>
           <p class="config-info">Wybierz preferowane drzewo do sadzenia i produkty dla budynków. Pozostaw puste aby bot sam wybrał dostępny produkt.</p>
           
@@ -327,6 +335,13 @@
               <input type="checkbox" id="smartModeEnabled">
               <span>Włącz tryb inteligentny</span>
             </label>
+            <div class="interval-setting cache-interval-setting" style="margin-top: 10px;">
+              <span>⏱️ Interwał sprawdzania cache:</span>
+              <div class="interval-input-group">
+                <input type="number" id="cacheInterval" value="60" min="10" max="600" step="10">
+                <span>sekund (10-600)</span>
+              </div>
+            </div>
           </div>
           
           <!-- Status harmonogramu -->
@@ -344,6 +359,25 @@
             <div id="currentTaskInfo" class="current-task hidden">
               <span>⏳ Aktualnie: </span>
               <span id="currentTaskName">-</span>
+            </div>
+          </div>
+          
+          <!-- Statystyki wykonań -->
+          <div class="scheduler-stats-box">
+            <h4>📈 Statystyki wykonań</h4>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">🌾 Farma:</span>
+                <span class="stat-value" id="statFarm">✓0 / ✗0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">🌲 Tartak:</span>
+                <span class="stat-value" id="statForestry">✓0 / ✗0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">🏪 Stragany:</span>
+                <span class="stat-value" id="statStalls">✓0 / ✗0</span>
+              </div>
             </div>
           </div>
           

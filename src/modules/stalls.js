@@ -123,6 +123,14 @@ export class StallsModule {
       await page.waitForSelector(stallSelector, { timeout: 5000 });
       await page.click(stallSelector);
       await this.session.randomDelay(1000, 2000);
+      
+      // Sprawdź czy pojawił się komunikat o zbyt niskim poziomie
+      const levelRestricted = await this.checkLevelRestriction();
+      if (levelRestricted) {
+        this.log.info(`Stragan ${stallNumber} - zbyt niski poziom gracza`);
+        return false;
+      }
+      
       await this.session.waitForPageReady();
       
       const slotSelector = `#map_stall${stallNumber}_slot1`;
@@ -134,6 +142,41 @@ export class StallsModule {
       this.log.warn(`Nie udało się otworzyć straganu ${stallNumber}: ${e.message}`);
       return false;
     }
+  }
+
+  /**
+   * Sprawdza czy pojawił się komunikat o zbyt niskim poziomie gracza
+   * @returns {boolean} true jeśli poziom zbyt niski
+   */
+  async checkLevelRestriction() {
+    const page = this.session.page;
+    
+    try {
+      const globalbox = await page.$('#globalbox');
+      if (globalbox) {
+        const isVisible = await globalbox.evaluate(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden';
+        });
+        
+        if (isVisible) {
+          const text = await globalbox.textContent();
+          if (text && text.includes('Twój poziom jest jeszcze zbyt niski')) {
+            // Zamknij popup
+            const closeBtn = await page.$('#globalbox_close');
+            if (closeBtn) {
+              await closeBtn.click();
+              await this.session.randomDelay(300, 500);
+            }
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      this.log.debug(`Błąd sprawdzania globalbox: ${e.message}`);
+    }
+    
+    return false;
   }
 
   /**

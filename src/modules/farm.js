@@ -3,8 +3,12 @@
  * Wolni Farmerzy - struktura:
  * - 4 farmy (farm1-farm4)
  * - 6 budynków na farmę (pos1-pos6) - klikamy #farm1_pos1_click
- * - Speedlinki do nawigacji: #speedlink_farm1, #speedlink_farm2, etc.
+ * - Speedlinki do nawigacji: #speedlink_farm1, #speedlink_farm2, etc. (TYLKO PREMIUM)
  * - W budynku są pola do sadzenia/zbierania/podlewania
+ * 
+ * RÓŻNICE PREMIUM vs NON-PREMIUM:
+ * - Premium: speedlinki, waterall, cropall, plantall
+ * - Non-premium: nawigacja przez mapę, ręczne klikanie każdego pola (120 pól!)
  */
 import { config } from '../config.js';
 import { updateField, logAction, scheduleTask, getFarmConfig } from '../database.js';
@@ -13,13 +17,58 @@ import { updateField, logAction, scheduleTask, getFarmConfig } from '../database
 let cropAlreadySelected = false;
 let selectedCropType = null;
 
+// Typy przeszkód na polach (chwasty, kamienie, itp.)
+const OBSTACLE_PATTERNS = [
+  'steine',      // kamienie - steine_04.gif
+  'unkraut',     // chwasty - unkraut_04.gif
+  'baumstumpf',  // pieniek - baumstumpf_04.gif
+  'maulwurf',    // kret - maulwurf_04.gif
+];
+
+// Mapowanie ID roślin na nazwy (z frontendu używamy ID)
+const CROP_ID_TO_NAME = {
+  1: 'Zboże', 17: 'Marchewka', 18: 'Ogórki', 20: 'Truskawki',
+  2: 'Kukurydza', 19: 'Rzodkiewka', 21: 'Pomidory', 22: 'Cebula',
+  23: 'Szpinak', 3: 'Koniczyna', 4: 'Rzepak', 24: 'Kalafior',
+  5: 'Buraki cukrowe', 6: 'Zioła', 109: 'Stokrotki', 108: 'Bodziszki',
+  26: 'Ziemniaki', 7: 'Słoneczniki', 8: 'Bławatki', 29: 'Szparagi',
+  31: 'Cukinia', 32: 'Jagody', 33: 'Maliny', 34: 'Porzeczki',
+  35: 'Jeżyny', 36: 'Mirabelki', 37: 'Jabłka', 38: 'Dynie',
+  39: 'Gruszki', 40: 'Wiśnie', 41: 'Śliwki', 42: 'Orzechy włoskie',
+  44: 'Czosnek', 43: 'Oliwki', 45: 'Czerwona kapusta', 46: 'Chili',
+  47: 'Kalarepa', 48: 'Mlecz', 49: 'Bazylia', 50: 'Borowiki',
+  51: 'Dalia', 52: 'Rabarbar', 53: 'Arbuzy', 54: 'Brokuły',
+  55: 'Fasola', 56: 'Oberżyna', 57: 'Papryka', 58: 'Groch',
+  59: 'Seler', 60: 'Awokado', 61: 'Por', 62: 'Brukselka', 63: 'Koper',
+  97: 'Gwiazdka betlejemska', 104: 'Żonkil', 107: 'Winogrona',
+  129: 'Herbata', 158: 'Pomarańczowy tulipan',
+};
+
 export class FarmModule {
-  constructor(browserSession, accountData) {
+  constructor(browserSession, accountData, playerInfo = null) {
     this.session = browserSession;
     this.account = accountData;
     this.log = this.session.log;
     this.currentFarm = 1;
     this.currentBuilding = null;
+    
+    // Informacje o koncie (premium, pieniądze, poziom)
+    this.playerInfo = playerInfo || {
+      isPremium: true,  // Domyślnie zakładamy premium (zachowanie wstecznej kompatybilności)
+      money: 0,
+      level: 1
+    };
+    
+    this.isPremium = this.playerInfo.isPremium;
+  }
+  
+  /**
+   * Ustawia informacje o graczu (wywoływane po zalogowaniu)
+   */
+  setPlayerInfo(playerInfo) {
+    this.playerInfo = playerInfo;
+    this.isPremium = playerInfo.isPremium;
+    this.log.info(`FarmModule: isPremium=${this.isPremium}, money=${playerInfo.money}, level=${playerInfo.level}`);
   }
   
   /**
@@ -31,10 +80,23 @@ export class FarmModule {
   }
 
   /**
-   * Nawiguje do konkretnej farmy używając speedlinków
+   * Nawiguje do konkretnej farmy
+   * - Premium: używa speedlinków
+   * - Non-premium: używa mapy
    */
   async navigateToFarm(farmNumber = 1) {
-    this.log.info(`Nawigacja do farmy ${farmNumber}...`);
+    if (this.isPremium) {
+      return await this.navigateToFarmPremium(farmNumber);
+    } else {
+      return await this.navigateToFarmViaMap(farmNumber);
+    }
+  }
+
+  /**
+   * Nawiguje do farmy używając speedlinków (PREMIUM)
+   */
+  async navigateToFarmPremium(farmNumber = 1) {
+    this.log.info(`[PREMIUM] Nawigacja do farmy ${farmNumber}...`);
     
     const page = this.session.page;
     await this.session.closePopups();
@@ -73,6 +135,97 @@ export class FarmModule {
       return true;
     } catch (e) {
       this.log.warn(`Nie udało się przejść do farmy ${farmNumber}`);
+      return false;
+    }
+  }
+
+  /**
+   * Nawiguje do farmy przez mapę (NON-PREMIUM)
+   * Mapa jest dostępna przez menu lub przycisk mapy
+   */
+  async navigateToFarmViaMap(farmNumber = 1) {
+    this.log.info(`[NON-PREMIUM] Nawigacja do farmy ${farmNumber} przez mapę...`);
+    
+    const page = this.session.page;
+    await this.session.closePopups();
+    
+    try {
+      // Otwórz mapę - może być #map, .maplink, lub w menu
+      const mapSelectors = [
+        '#map',
+        '.maplink', 
+        'a[href*="map"]',
+        '#mainmenue_map',
+        '[onclick*="map"]'
+      ];
+      
+      let mapOpened = false;
+      for (const selector of mapSelectors) {
+        try {
+          const mapBtn = await page.$(selector);
+          if (mapBtn && await mapBtn.isVisible()) {
+            await mapBtn.click();
+            await this.session.randomDelay(1000, 2000);
+            mapOpened = true;
+            break;
+          }
+        } catch (e) {}
+      }
+      
+      if (!mapOpened) {
+        // Spróbuj przez menu główne
+        try {
+          await page.click('#mainmenue1', { timeout: 3000 });
+          await this.session.randomDelay(500, 1000);
+        } catch (e) {}
+      }
+      
+      // Na mapie kliknij na odpowiednią farmę
+      // Farmy mogą być oznaczone jako farm1, farm2, etc. lub mieć inne identyfikatory
+      const farmSelectors = [
+        `#mapfarm${farmNumber}`,
+        `#farm${farmNumber}`,
+        `.map-farm-${farmNumber}`,
+        `[onclick*="farm${farmNumber}"]`,
+        `a[href*="farm=${farmNumber}"]`
+      ];
+      
+      for (const selector of farmSelectors) {
+        try {
+          const farmEl = await page.$(selector);
+          if (farmEl) {
+            await farmEl.click();
+            await this.session.randomDelay(1000, 2000);
+            await this.session.waitForPageReady();
+            this.currentFarm = farmNumber;
+            this.currentBuilding = null;
+            this.log.info(`Przeszliśmy do farmy ${farmNumber} przez mapę`);
+            return true;
+          }
+        } catch (e) {}
+      }
+      
+      // Ostatnia próba - bezpośredni URL
+      const currentUrl = page.url();
+      if (currentUrl.includes('wolnifarmerzy')) {
+        const farmUrl = currentUrl.replace(/farm=\d+/, `farm=${farmNumber}`);
+        if (!farmUrl.includes(`farm=${farmNumber}`)) {
+          // Dodaj parametr farm jeśli nie istnieje
+          const separator = farmUrl.includes('?') ? '&' : '?';
+          await page.goto(`${farmUrl}${separator}farm=${farmNumber}`);
+        } else {
+          await page.goto(farmUrl);
+        }
+        await this.session.waitForPageReady();
+        this.currentFarm = farmNumber;
+        return true;
+      }
+      
+      this.log.warn(`Nie udało się przejść do farmy ${farmNumber} przez mapę`);
+      return false;
+      
+    } catch (e) {
+      this.log.warn(`Błąd nawigacji przez mapę: ${e.message}`);
       return false;
     }
   }
@@ -245,6 +398,63 @@ export class FarmModule {
     return statuses;
   }
 
+  // Lista typów budynków które NIE są polami uprawnymi (pomijamy ich obsługę)
+  static NON_FIELD_BUILDINGS = [
+    'Kurnik',
+    'Obora', 
+    'Owczarnia',
+    'Pasieka',
+    'Stajnia',
+    'Chlewnia',
+    'Kaczkarnia',
+    'Gęsiarnia',
+    'Zagroda dla królików',
+  ];
+
+  /**
+   * Sprawdza typ budynku na podstawie tooltipa
+   * @returns {string|null} nazwa budynku lub null
+   */
+  async getBuildingType(position) {
+    const page = this.session.page;
+    const ttSelector = `#farm${this.currentFarm}_pos${position}_tt .farm_pos_tt_name`;
+    
+    try {
+      const nameEl = await page.$(ttSelector);
+      if (nameEl) {
+        const name = await nameEl.textContent();
+        return name ? name.trim() : null;
+      }
+    } catch (e) {
+      this.log.debug(`Nie udało się pobrać typu budynku: ${e.message}`);
+    }
+    
+    return null;
+  }
+
+  /**
+   * Sprawdza czy budynek to pole uprawne (nie kurnik, obora itp.)
+   */
+  async isFieldBuilding(position) {
+    const buildingType = await this.getBuildingType(position);
+    
+    if (!buildingType) {
+      // Jeśli nie możemy określić typu, zakładamy że to pole
+      return true;
+    }
+    
+    const isNonField = FarmModule.NON_FIELD_BUILDINGS.some(type => 
+      buildingType.toLowerCase().includes(type.toLowerCase())
+    );
+    
+    if (isNonField) {
+      this.log.debug(`Budynek ${position} to ${buildingType} - pomijam (nie jest polem uprawnym)`);
+      return false;
+    }
+    
+    return true;
+  }
+
   /**
    * Wchodzi do budynku pól uprawnych (pos1-pos6)
    */
@@ -259,6 +469,12 @@ export class FarmModule {
       return false;
     }
     
+    // Sprawdź czy to pole uprawne (nie kurnik, obora itp.)
+    const isField = await this.isFieldBuilding(position);
+    if (!isField) {
+      return false;
+    }
+    
     this.log.info(`Wchodzenie do budynku pól ${position} na farmie ${this.currentFarm}...`);
     
     // Selektor budynku: #farm1_pos1_click, #farm1_pos2_click, etc.
@@ -269,6 +485,31 @@ export class FarmModule {
       if (building) {
         await building.click({ timeout: 5000 });
         await this.session.randomDelay(1000, 2000);
+        
+        // Sprawdź i obsłuż wszystkie możliwe popupy (poziom, premium, przeszkody)
+        const popupResult = await this.handleBuildingPopups();
+        
+        if (popupResult === 'level_restricted') {
+          this.log.info(`Budynek ${position} na farmie ${this.currentFarm} - zbyt niski poziom gracza`);
+          return false;
+        }
+        
+        if (popupResult === 'premium_required') {
+          this.log.info(`Budynek ${position} na farmie ${this.currentFarm} - wymaga konta premium`);
+          return false;
+        }
+        
+        if (popupResult === 'obstacle_cleared') {
+          this.log.info(`Usunięto przeszkodę na polu ${position}`);
+          // Po wyczyszczeniu trzeba ponownie kliknąć w budynek
+          await this.session.randomDelay(500, 1000);
+          await building.click({ timeout: 5000 });
+          await this.session.randomDelay(1000, 2000);
+        } else if (popupResult === 'cannot_afford') {
+          this.log.info(`Nie stać na usunięcie przeszkody na polu ${position}`);
+          return false;
+        }
+        
         await this.session.waitForPageReady();
         this.currentBuilding = position;
         this.log.info(`Weszliśmy do budynku ${position}`);
@@ -281,6 +522,236 @@ export class FarmModule {
       this.log.debug(`Budynek ${position} niedostępny: ${e.message.split('\n')[0]}`);
       return false;
     }
+  }
+
+  /**
+   * Obsługuje wszystkie możliwe popupy przy wchodzeniu do budynku
+   * @returns {'ok'|'level_restricted'|'premium_required'|'obstacle_cleared'|'cannot_afford'} status
+   */
+  async handleBuildingPopups() {
+    const page = this.session.page;
+    
+    try {
+      const globalbox = await page.$('#globalbox');
+      if (!globalbox) return 'ok';
+      
+      const isVisible = await globalbox.evaluate(el => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      
+      if (!isVisible) return 'ok';
+      
+      // Pobierz treść popupa
+      const content = await page.$('#globalbox_content');
+      const contentText = content ? await content.textContent() : '';
+      
+      const headline = await page.$('#globalbox_headline');
+      const headlineText = headline ? await headline.textContent() : '';
+      
+      this.log.debug(`Popup globalbox - nagłówek: "${headlineText}", treść: "${contentText}"`);
+      
+      // 1. Sprawdź czy to komunikat o zbyt niskim poziomie
+      if (contentText.includes('Twój poziom jest jeszcze zbyt niski')) {
+        await this.closeGlobalBox();
+        return 'level_restricted';
+      }
+      
+      // 2. Sprawdź czy wymaga premium
+      if (contentText.includes('Wymaga konta premium') || contentText.includes('premium')) {
+        await this.closeGlobalBox();
+        return 'premium_required';
+      }
+      
+      // 3. Sprawdź czy to popup czyszczenia przeszkód
+      if (headlineText.includes('Wyczyścić pole') || contentText.includes('Usunięcie kosztuje')) {
+        return await this.handleObstaclePopup(contentText);
+      }
+      
+      // Nieznany popup - zamknij i kontynuuj
+      this.log.debug('Nieznany popup globalbox - zamykam');
+      await this.closeGlobalBox();
+      return 'ok';
+      
+    } catch (e) {
+      this.log.debug(`Błąd obsługi popupów: ${e.message}`);
+      return 'ok';
+    }
+  }
+
+  /**
+   * Zamyka globalbox
+   */
+  async closeGlobalBox() {
+    const page = this.session.page;
+    try {
+      const closeBtn = await page.$('#globalbox_close');
+      if (closeBtn) {
+        await closeBtn.click();
+        await this.session.randomDelay(300, 500);
+        return true;
+      }
+      // Alternatywnie kliknij button1 (często jest to "OK")
+      const btn1 = await page.$('#globalbox_button1');
+      if (btn1) {
+        await btn1.click();
+        await this.session.randomDelay(300, 500);
+        return true;
+      }
+    } catch (e) {
+      this.log.debug(`Błąd zamykania globalbox: ${e.message}`);
+    }
+    return false;
+  }
+
+  /**
+   * Obsługuje popup usuwania przeszkód
+   * @param {string} contentText - treść popupa
+   * @returns {'obstacle_cleared'|'cannot_afford'|'ok'}
+   */
+  async handleObstaclePopup(contentText) {
+    const page = this.session.page;
+    
+    this.log.info(`Wykryto przeszkodę do usunięcia: ${contentText}`);
+    
+    // Parsuj koszt z tekstu "Usunięcie kosztuje 30,00 ft."
+    const costMatch = contentText.match(/([\d\s.,]+)\s*ft/i);
+    if (costMatch) {
+      const costStr = costMatch[1].replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+      const cost = parseFloat(costStr);
+      
+      this.log.debug(`Koszt usunięcia przeszkody: ${cost} ft`);
+      
+      // Sprawdź czy gracza stać
+      if (this.playerInfo && this.playerInfo.money !== undefined) {
+        if (cost > this.playerInfo.money) {
+          this.log.info(`Nie stać na usunięcie przeszkody (koszt: ${cost} ft, kasa: ${this.playerInfo.money} ft)`);
+          await this.closeGlobalBox();
+          return 'cannot_afford';
+        }
+        this.log.info(`Stać na usunięcie przeszkody (koszt: ${cost} ft, kasa: ${this.playerInfo.money} ft)`);
+      }
+    }
+    
+    // Kliknij "Tak" aby usunąć przeszkodę
+    const yesBtn = await page.$('#globalbox_button1');
+    if (yesBtn) {
+      this.log.info('Usuwam przeszkodę z pola...');
+      await yesBtn.click();
+      await this.session.randomDelay(1500, 2500);
+      return 'obstacle_cleared';
+    }
+    
+    return 'ok';
+  }
+
+  /**
+   * Sprawdza czy pojawił się komunikat o zbyt niskim poziomie gracza
+   * Zamyka popup jeśli istnieje
+   * @returns {boolean} true jeśli poziom zbyt niski
+   * @deprecated Użyj handleBuildingPopups() zamiast tego
+   */
+  async checkLevelRestriction() {
+    const page = this.session.page;
+    
+    try {
+      const globalbox = await page.$('#globalbox');
+      if (globalbox) {
+        const isVisible = await globalbox.evaluate(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden';
+        });
+        
+        if (isVisible) {
+          const text = await globalbox.textContent();
+          if (text && text.includes('Twój poziom jest jeszcze zbyt niski')) {
+            // Zamknij popup
+            const closeBtn = await page.$('#globalbox_close');
+            if (closeBtn) {
+              await closeBtn.click();
+              await this.session.randomDelay(300, 500);
+            }
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      this.log.debug(`Błąd sprawdzania globalbox: ${e.message}`);
+    }
+    
+    return false;
+  }
+
+  /**
+   * Obsługuje popup usuwania przeszkód (chwasty, kamienie itp.)
+   * @returns {'cleared'|'cannot_afford'|'no_obstacle'} status operacji
+   * @deprecated Użyj handleBuildingPopups() zamiast tego
+   */
+  async handleObstacleClearing() {
+    const page = this.session.page;
+    
+    try {
+      const globalbox = await page.$('#globalbox');
+      if (!globalbox) return 'no_obstacle';
+      
+      const isVisible = await globalbox.evaluate(el => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      
+      if (!isVisible) return 'no_obstacle';
+      
+      // Sprawdź czy to popup "Wyczyścić pole?"
+      const headline = await page.$('#globalbox_headline');
+      if (!headline) return 'no_obstacle';
+      
+      const headlineText = await headline.textContent();
+      if (!headlineText || !headlineText.includes('Wyczyścić pole')) {
+        return 'no_obstacle';
+      }
+      
+      // Pobierz koszt usunięcia
+      const content = await page.$('#globalbox_content');
+      if (content) {
+        const contentText = await content.textContent();
+        this.log.debug(`Popup usuwania przeszkody: ${contentText}`);
+        
+        // Parsuj koszt z tekstu "Usunięcie kosztuje 30,00 ft."
+        const costMatch = contentText.match(/([\d\s,]+)\s*ft/i);
+        if (costMatch) {
+          const costStr = costMatch[1].replace(/\s/g, '').replace(',', '.');
+          const cost = parseFloat(costStr);
+          
+          // Sprawdź czy gracza stać (jeśli mamy info o kasie)
+          if (this.playerInfo && this.playerInfo.money !== undefined) {
+            if (cost > this.playerInfo.money) {
+              this.log.info(`Nie stać na usunięcie przeszkody (koszt: ${cost} ft, kasa: ${this.playerInfo.money} ft)`);
+              // Zamknij popup
+              const closeBtn = await page.$('#globalbox_close');
+              if (closeBtn) {
+                await closeBtn.click();
+                await this.session.randomDelay(300, 500);
+              }
+              return 'cannot_afford';
+            }
+          }
+        }
+      }
+      
+      // Kliknij "Tak" aby usunąć przeszkodę
+      const yesBtn = await page.$('#globalbox_button1');
+      if (yesBtn) {
+        this.log.info('Usuwam przeszkodę z pola...');
+        await yesBtn.click();
+        await this.session.randomDelay(1000, 2000);
+        return 'cleared';
+      }
+      
+    } catch (e) {
+      this.log.debug(`Błąd obsługi przeszkody: ${e.message}`);
+    }
+    
+    return 'no_obstacle';
   }
 
   /**
@@ -480,10 +951,21 @@ export class FarmModule {
 
   /**
    * Zbiera plony w aktualnym budynku
-   * Używa #cropall (span.cropall) - "Zbierz wszystko"
-   * Po zebraniu akceptuje powiadomienie przez #globalbox_button1
+   * - Premium: używa #cropall ("Zbierz wszystko")
+   * - Non-premium: klika ręcznie na każde gotowe pole
    */
   async harvestInCurrentBuilding() {
+    if (this.isPremium) {
+      return await this.harvestInCurrentBuildingPremium();
+    } else {
+      return await this.harvestInCurrentBuildingManual();
+    }
+  }
+
+  /**
+   * Zbiera plony używając "Zbierz wszystko" (PREMIUM)
+   */
+  async harvestInCurrentBuildingPremium() {
     const page = this.session.page;
     
     // Najpierw włącz tryb zbierania klikając #ernten
@@ -500,9 +982,16 @@ export class FarmModule {
     try {
       const cropAllBtn = await page.$('#cropall');
       if (cropAllBtn) {
+        // Sprawdź czy przycisk jest aktywny (nie ma klasy _inactive)
+        const className = await cropAllBtn.getAttribute('class');
+        if (className && className.includes('_inactive')) {
+          this.log.debug('Przycisk cropall nieaktywny - brak pól do zbioru');
+          return 0;
+        }
+        
         await cropAllBtn.click();
         await this.session.randomDelay(1000, 2000);
-        this.log.info('Użyto "Zbierz wszystko" (#cropall)');
+        this.log.info('[PREMIUM] Użyto "Zbierz wszystko" (#cropall)');
         harvested = true;
       }
     } catch (e) {
@@ -530,38 +1019,116 @@ export class FarmModule {
       }
     }
     
-    // Akceptuj powiadomienie po zebraniu (jeśli się pojawi)
-    // #globalbox_button1 - przycisk "Tak" / "OK" w oknie powiadomienia
-    // Może być: potwierdzenie zbiorów LUB "Nie ma nic do zebrania"
+    // Akceptuj powiadomienie po zebraniu
     if (harvested) {
-      await this.session.randomDelay(500, 1000);
-      try {
-        const globalbox = await page.$('#globalbox');
-        if (globalbox && await globalbox.isVisible()) {
-          // Sprawdź treść powiadomienia
-          const content = await page.$eval('#globalbox_content', el => el.textContent || '').catch(() => '');
-          
-          if (content.includes('Nie ma nic do zebrania') || content.includes('nic do zebrania')) {
-            // Nic nie było do zebrania - zamknij popup
-            this.log.debug('Nie ma nic do zebrania, zamykam popup');
-            harvested = false; // Faktycznie nic nie zebrano
-          }
-          
-          // Zamknij popup (niezależnie od treści)
-          const confirmBtn = await page.$('#globalbox_button1');
-          if (confirmBtn && await confirmBtn.isVisible()) {
-            await confirmBtn.click();
-            await this.session.randomDelay(300, 500);
-          }
-        }
-      } catch (e) {}
+      await this.acceptGlobalBoxIfVisible();
     }
     
     return harvested ? 1 : 0;
   }
 
   /**
-   * Sadzi rośliny na pustych polach używając automatu do sadzenia
+   * Zbiera plony ręcznie klikając na każde pole (NON-PREMIUM)
+   * Budynek ma 120 pól (12x10)
+   */
+  async harvestInCurrentBuildingManual() {
+    const page = this.session.page;
+    this.log.info('[NON-PREMIUM] Ręczne zbieranie plonów...');
+    
+    // Najpierw włącz tryb zbierania klikając #ernten
+    try {
+      const harvestMode = await page.$('#ernten');
+      if (harvestMode) {
+        await harvestMode.click();
+        await this.session.randomDelay(300, 500);
+      }
+    } catch (e) {
+      this.log.warn('Nie można włączyć trybu zbierania');
+      return 0;
+    }
+    
+    let harvestedCount = 0;
+    
+    // Pobierz wszystkie pola gotowe do zbioru
+    // Gotowe pola mają w URL produktu końcówkę _04.gif (faza 4 = dojrzałe)
+    // np. getreide_04.gif, karotte_04.gif
+    const readyFields = await page.$$eval('#gardenarea .feld', (fields) => {
+      const ready = [];
+      fields.forEach((field, index) => {
+        const innerField = field.querySelector('[id^="f"]');
+        if (innerField) {
+          const style = innerField.getAttribute('style') || '';
+          const bgMatch = style.match(/background:url\(['"]?([^'"]+)['"]?\)/);
+          if (bgMatch) {
+            const bgUrl = bgMatch[1];
+            // Sprawdź czy to gotowa roślina (faza 4, ale nie 04.1.1 ani 04.1.2 - te rosną)
+            // Gotowe: produkt_04.gif (bez dodatkowych numerów)
+            // Rosnące: produkt_04.1.1.gif, produkt_04.1.2.gif itd.
+            if (bgUrl.includes('_04.gif') && !bgUrl.includes('_04.1') && !bgUrl.includes('steine') && !bgUrl.includes('unkraut') && !bgUrl.includes('baumstumpf') && !bgUrl.includes('maulwurf') && !bgUrl.includes('/0.gif')) {
+              ready.push({
+                index: index + 1,
+                fieldId: field.id,
+                innerId: innerField.id,
+                bgUrl: bgUrl
+              });
+            }
+          }
+        }
+      });
+      return ready;
+    });
+    
+    this.log.info(`Znaleziono ${readyFields.length} pól gotowych do zbioru`);
+    
+    // Kliknij na każde gotowe pole
+    for (const field of readyFields) {
+      try {
+        const fieldEl = await page.$(`#${field.innerId}`);
+        if (fieldEl) {
+          await fieldEl.click();
+          await this.session.randomDelay(150, 300);
+          harvestedCount++;
+        }
+      } catch (e) {
+        this.log.debug(`Błąd zbierania pola ${field.index}: ${e.message}`);
+      }
+    }
+    
+    // Poczekaj na przetworzenie i zamknij ewentualny popup
+    await this.session.randomDelay(500, 1000);
+    await this.acceptGlobalBoxIfVisible();
+    
+    this.log.info(`[NON-PREMIUM] Zebrano ${harvestedCount} pól`);
+    return harvestedCount;
+  }
+
+  /**
+   * Zamyka popup globalbox jeśli jest widoczny
+   */
+  async acceptGlobalBoxIfVisible() {
+    const page = this.session.page;
+    
+    try {
+      const globalbox = await page.$('#globalbox');
+      if (globalbox && await globalbox.isVisible()) {
+        const confirmBtn = await page.$('#globalbox_button1');
+        if (confirmBtn && await confirmBtn.isVisible()) {
+          await confirmBtn.click();
+          await this.session.randomDelay(300, 500);
+        } else {
+          // Zamknij przez X
+          const closeBtn = await page.$('#globalbox_close');
+          if (closeBtn) {
+            await closeBtn.click();
+            await this.session.randomDelay(200, 400);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * Sadzi rośliny na pustych polach używając automatu do sadzenia (PREMIUM)
    * NOWA LOGIKA: Szukamy sadzonki na regałach 1, 2, 3
    * 
    * 1. Kliknij #autoplantbuttoninner (otwiera okno wyboru)
@@ -569,40 +1136,49 @@ export class FarmModule {
    * 3. Kliknij na sadzonkę gdy znajdziemy (rackitem z odpowiednią nazwą w tooltip)
    * 4. Zatwierdź przyciskiem #globalbox_button1
    */
-  async plantInCurrentBuilding(cropType = 'zboze') {
+  async plantInCurrentBuildingPremium(cropType = 'Zboże') {
     const page = this.session.page;
     
-    // Mapa nazw roślin - jak wyświetlane w tooltipach (headline)
-    const cropNames = {
+    // Mapa nazw roślin - obsługuje różne formaty wejścia
+    // cropType może być: nazwą polską z diakrytykami, nazwą bez diakrytyków, lub angielską
+    const cropNameMap = {
+      // Polskie nazwy bez diakrytyków -> z diakrytykami
       'zboze': 'Zboże', 'wheat': 'Zboże', 'pszenica': 'Zboże',
       'kukurydza': 'Kukurydza', 'corn': 'Kukurydza',
       'koniczyna': 'Koniczyna', 'clover': 'Koniczyna',
       'rzepak': 'Rzepak', 'rapeseed': 'Rzepak',
-      'buraki': 'Buraki cukrowe', 'beets': 'Buraki cukrowe',
-      'ziola': 'Zioła', 'herbs': 'Zioła',
-      'sloneczniki': 'Słoneczniki', 'sunflowers': 'Słoneczniki',
-      'blawatki': 'Bławatki', 'cornflowers': 'Bławatki',
-      'marchewki': 'Marchewka', 'carrots': 'Marchewka',
-      'ogorki': 'Ogórki', 'cucumbers': 'Ogórki',
-      'rzodkiewki': 'Rzodkiewka', 'radishes': 'Rzodkiewka',
+      'buraki': 'Buraki cukrowe', 'beets': 'Buraki cukrowe', 'buraki cukrowe': 'Buraki cukrowe',
+      'ziola': 'Zioła', 'herbs': 'Zioła', 'zioła': 'Zioła',
+      'sloneczniki': 'Słoneczniki', 'sunflowers': 'Słoneczniki', 'słoneczniki': 'Słoneczniki',
+      'blawatki': 'Bławatki', 'cornflowers': 'Bławatki', 'bławatki': 'Bławatki',
+      'marchewki': 'Marchewka', 'carrots': 'Marchewka', 'marchewka': 'Marchewka',
+      'ogorki': 'Ogórki', 'cucumbers': 'Ogórki', 'ogórki': 'Ogórki',
+      'rzodkiewki': 'Rzodkiewka', 'radishes': 'Rzodkiewka', 'rzodkiewka': 'Rzodkiewka',
       'truskawki': 'Truskawki', 'strawberries': 'Truskawki',
       'pomidory': 'Pomidory', 'tomatoes': 'Pomidory',
-      'cebule': 'Cebula', 'onions': 'Cebula',
+      'cebule': 'Cebula', 'onions': 'Cebula', 'cebula': 'Cebula',
       'szpinak': 'Szpinak', 'spinach': 'Szpinak',
-      'kalafiory': 'Kalafior', 'cauliflower': 'Kalafior',
+      'kalafiory': 'Kalafior', 'cauliflower': 'Kalafior', 'kalafior': 'Kalafior',
       'ziemniaki': 'Ziemniaki', 'potatoes': 'Ziemniaki',
       'szparagi': 'Szparagi', 'asparagus': 'Szparagi',
-      'cukinie': 'Cukinia', 'zucchini': 'Cukinia',
+      'cukinie': 'Cukinia', 'zucchini': 'Cukinia', 'cukinia': 'Cukinia',
       'jagody': 'Jagody', 'blueberries': 'Jagody',
       'maliny': 'Maliny', 'raspberries': 'Maliny',
-      'jablka': 'Jabłka', 'apples': 'Jabłka',
+      'jablka': 'Jabłka', 'apples': 'Jabłka', 'jabłka': 'Jabłka',
       'dynie': 'Dynie', 'pumpkins': 'Dynie',
+      'gwiazdka betlejemska': 'Gwiazdka betlejemska',
+      'żonkil': 'Żonkil', 'zonkil': 'Żonkil',
+      'winogrona': 'Winogrona',
+      'herbata': 'Herbata',
+      'pomarańczowy tulipan': 'Pomarańczowy tulipan', 'pomaranczowy tulipan': 'Pomarańczowy tulipan',
     };
     
-    const cropName = cropNames[cropType.toLowerCase()] || 'Zboże';
+    // Jeśli cropType już jest pełną nazwą (np. z CROP_ID_TO_NAME), użyj jej bezpośrednio
+    // W przeciwnym razie spróbuj zmapować
+    const cropName = cropNameMap[cropType.toLowerCase()] || cropType;
     
     // Sprawdź czy musimy zmienić roślinę (inna niż poprzednio wybrana)
-    const needToSelectCrop = !cropAlreadySelected || selectedCropType !== cropType;
+    const needToSelectCrop = !cropAlreadySelected || selectedCropType !== cropName;
     
     if (needToSelectCrop) {
       this.log.info(`Sadzenie rośliny "${cropName}" (${cropType}) - szukam na regałach...`);
@@ -755,15 +1331,26 @@ export class FarmModule {
 
   /**
    * Podlewa pola w aktualnym budynku
-   * Używa #waterall (span.waterall) - "Podlej wszystko"
-   * Wzorowane na harvestInCurrentBuilding które działa poprawnie
+   * - Premium: używa #waterall ("Podlej wszystko")
+   * - Non-premium: klika ręcznie na każde niepodlane pole
    */
   async waterInCurrentBuilding() {
+    if (this.isPremium) {
+      return await this.waterInCurrentBuildingPremium();
+    } else {
+      return await this.waterInCurrentBuildingManual();
+    }
+  }
+
+  /**
+   * Podlewa używając "Podlej wszystko" (PREMIUM)
+   */
+  async waterInCurrentBuildingPremium() {
     const page = this.session.page;
     
-    this.log.info('Rozpoczynam podlewanie...');
+    this.log.info('[PREMIUM] Rozpoczynam podlewanie...');
     
-    // Najpierw włącz tryb podlewania klikając #giessen (tak jak #ernten dla zbierania)
+    // Najpierw włącz tryb podlewania klikając #giessen
     try {
       const waterMode = await page.$('#giessen');
       if (waterMode) {
@@ -775,34 +1362,36 @@ export class FarmModule {
       this.log.debug(`Nie znaleziono #giessen: ${e.message}`);
     }
     
-    // Kliknij "Podlej wszystko" - #waterall (tak samo jak #cropall dla zbierania)
+    // Kliknij "Podlej wszystko" - #waterall
     let watered = false;
     try {
       const waterAllBtn = await page.$('#waterall');
       if (waterAllBtn) {
+        // Sprawdź czy przycisk jest aktywny
+        const className = await waterAllBtn.getAttribute('class');
+        if (className && className.includes('_inactive')) {
+          this.log.debug('Przycisk waterall nieaktywny - brak pól do podlania');
+          return 0;
+        }
+        
         await waterAllBtn.click();
         await this.session.randomDelay(1000, 2000);
-        this.log.info('Użyto "Podlej wszystko" (#waterall)');
+        this.log.info('[PREMIUM] Użyto "Podlej wszystko" (#waterall)');
         watered = true;
       }
     } catch (e) {
       this.log.debug(`Błąd podlewania #waterall: ${e.message}`);
     }
     
-    // Alternatywne selektory jeśli #waterall nie zadziałał
+    // Alternatywne selektory
     if (!watered) {
-      const waterSelectors = [
-        '.waterall',
-        'span.waterall',
-      ];
-      
+      const waterSelectors = ['.waterall', 'span.waterall'];
       for (const selector of waterSelectors) {
         try {
           const btn = await page.$(selector);
           if (btn && await btn.isVisible()) {
             await btn.click();
             await this.session.randomDelay(1000, 2000);
-            this.log.info(`Użyto alternatywne podlewanie (${selector})`);
             watered = true;
             break;
           }
@@ -810,25 +1399,557 @@ export class FarmModule {
       }
     }
     
-    // Akceptuj powiadomienie po podlaniu (jeśli się pojawi)
     if (watered) {
-      await this.session.randomDelay(500, 1000);
-      try {
-        const globalbox = await page.$('#globalbox');
-        if (globalbox && await globalbox.isVisible()) {
-          const confirmBtn = await page.$('#globalbox_button1');
-          if (confirmBtn && await confirmBtn.isVisible()) {
-            await confirmBtn.click();
-            this.log.debug('Zaakceptowano powiadomienie po podlewaniu (#globalbox_button1)');
-            await this.session.randomDelay(300, 500);
-          }
-        }
-      } catch (e) {}
-    } else {
-      this.log.warn('Nie udało się podlać - nie znaleziono przycisku podlewania');
+      await this.acceptGlobalBoxIfVisible();
     }
     
     return watered ? 1 : 0;
+  }
+
+  /**
+   * Podlewa ręcznie klikając na każde pole z rośliną (NON-PREMIUM)
+   * Flow: 1) Klik #giessen 2) Klik na każde pole z rośliną
+   */
+  async waterInCurrentBuildingManual() {
+    const page = this.session.page;
+    this.log.info('[NON-PREMIUM] Ręczne podlewanie pól...');
+    
+    // Krok 1: Włącz tryb podlewania (#giessen)
+    try {
+      const waterMode = await page.$('#giessen');
+      if (waterMode) {
+        await waterMode.click();
+        await this.session.randomDelay(400, 700);
+        this.log.debug('Włączono tryb podlewania');
+      } else {
+        this.log.warn('Nie znaleziono przycisku #giessen');
+        return 0;
+      }
+    } catch (e) {
+      this.log.warn(`Nie można włączyć trybu podlewania: ${e.message}`);
+      return 0;
+    }
+    
+    let wateredCount = 0;
+    
+    // Krok 2: Znajdź wszystkie pola z roślinami
+    try {
+      const fieldsWithPlants = await page.$$eval('#gardenarea .feld', (fields) => {
+        return fields.map((field, index) => {
+          const innerField = field.querySelector('[id^="f"]');
+          if (!innerField) return null;
+          
+          const style = innerField.getAttribute('style') || '';
+          const bgMatch = style.match(/background[^;]*url\(['"]?([^'")\s]+)['"]?\)/i);
+          const bgUrl = bgMatch ? bgMatch[1] : '';
+          
+          // Pole z rośliną: ma tło inne niż /0.gif i nie jest przeszkodą
+          const isEmpty = bgUrl.includes('/0.gif') || bgUrl === '';
+          const isObstacle = bgUrl.includes('steine') || 
+                            bgUrl.includes('unkraut') || 
+                            bgUrl.includes('baumstumpf') || 
+                            bgUrl.includes('maulwurf');
+          
+          // Roślina: nie jest puste i nie jest przeszkodą
+          const hasPlant = !isEmpty && !isObstacle && bgUrl !== '';
+          
+          if (hasPlant) {
+            return {
+              index,
+              innerId: innerField.id,
+              bgUrl
+            };
+          }
+          return null;
+        }).filter(f => f !== null);
+      });
+      
+      this.log.info(`Znaleziono ${fieldsWithPlants.length} pól z roślinami do podlania`);
+      
+      // Kliknij na każde pole z rośliną
+      for (const fieldInfo of fieldsWithPlants) {
+        try {
+          const fieldEl = await page.$(`#${fieldInfo.innerId}`);
+          if (fieldEl) {
+            await fieldEl.click();
+            await this.session.randomDelay(100, 200);
+            wateredCount++;
+          }
+        } catch (e) {
+          this.log.debug(`Błąd podlewania pola ${fieldInfo.index}: ${e.message}`);
+        }
+      }
+      
+    } catch (e) {
+      this.log.warn(`Błąd pobierania pól do podlania: ${e.message}`);
+    }
+    
+    this.log.info(`[NON-PREMIUM] Podlano ${wateredCount} pól`);
+    return wateredCount;
+  }
+
+  /**
+   * Sadzi rośliny na pustych polach
+   * - Premium: używa automatu do sadzenia
+   * - Non-premium: klika ręcznie na każde puste pole
+   */
+  async plantInCurrentBuilding(cropType = 'zboze') {
+    if (this.isPremium) {
+      return await this.plantInCurrentBuildingPremium(cropType);
+    } else {
+      return await this.plantInCurrentBuildingManual(cropType);
+    }
+  }
+
+  /**
+   * Sadzi rośliny ręcznie klikając na każde puste pole (NON-PREMIUM)
+   * Flow: 1) Klik #anpflanzen 2) Klik #rackitemXX 3) Klik na wolne pola
+   */
+  async plantInCurrentBuildingManual(cropType = 'Zboże') {
+    const page = this.session.page;
+    
+    // Mapowanie nazwy rośliny na ID (dla #rackitemXX)
+    const cropNameToId = {
+      'zboże': 1, 'zboze': 1,
+      'kukurydza': 2,
+      'koniczyna': 3,
+      'rzepak': 4,
+      'buraki cukrowe': 5, 'buraki': 5,
+      'zioła': 6, 'ziola': 6,
+      'słoneczniki': 7, 'sloneczniki': 7,
+      'bławatki': 8, 'blawatki': 8,
+      'marchewka': 17, 'marchewki': 17,
+      'ogórki': 18, 'ogorki': 18,
+      'rzodkiewka': 19, 'rzodkiewki': 19,
+      'truskawki': 20,
+      'pomidory': 21,
+      'cebula': 22, 'cebule': 22,
+      'szpinak': 23,
+      'kalafior': 24, 'kalafiory': 24,
+      'ziemniaki': 26,
+      'szparagi': 29,
+      'cukinia': 31, 'cukinie': 31,
+      'jagody': 32,
+      'maliny': 33,
+      'porzeczki': 34,
+      'jeżyny': 35, 'jezyny': 35,
+      'mirabelki': 36,
+      'jabłka': 37, 'jablka': 37,
+      'dynie': 38,
+      'gwiazdka betlejemska': 97,
+      'żonkil': 104, 'zonkil': 104,
+      'winogrona': 107,
+      'herbata': 129,
+      'pomarańczowy tulipan': 158, 'pomaranczowy tulipan': 158,
+    };
+    
+    // Znajdź ID rośliny
+    const cropId = cropNameToId[cropType.toLowerCase()] || 1;
+    this.log.info(`[NON-PREMIUM] Sadzenie "${cropType}" (ID: ${cropId}) - tryb ręczny`);
+    
+    // Krok 1: Kliknij przycisk "Zasiej" (#anpflanzen)
+    try {
+      const plantModeBtn = await page.$('#anpflanzen');
+      if (plantModeBtn) {
+        await plantModeBtn.click();
+        await this.session.randomDelay(500, 800);
+        this.log.debug('Włączono tryb sadzenia');
+      } else {
+        this.log.warn('Nie znaleziono przycisku #anpflanzen');
+        return 0;
+      }
+    } catch (e) {
+      this.log.warn(`Nie można włączyć trybu sadzenia: ${e.message}`);
+      return 0;
+    }
+    
+    // Krok 2: Wybierz sadzonkę z regału (#rackitemXX)
+    try {
+      const rackItemSelector = `#rackitem${cropId}`;
+      const rackItem = await page.$(rackItemSelector);
+      
+      if (rackItem) {
+        // Sprawdź czy mamy sadzonki w magazynie (counter > 0)
+        const counterText = await page.$eval(`${rackItemSelector} .counter_sack`, el => el.textContent).catch(() => '0');
+        const seedCount = parseInt(counterText) || 0;
+        
+        if (seedCount === 0) {
+          this.log.warn(`Brak sadzonek ${cropType} w magazynie`);
+          return 0;
+        }
+        
+        this.log.debug(`Znaleziono ${seedCount} sadzonek ${cropType}, wybieram...`);
+        await rackItem.click();
+        await this.session.randomDelay(300, 500);
+      } else {
+        this.log.warn(`Nie znaleziono sadzonki ${rackItemSelector} - może brak w magazynie`);
+        return 0;
+      }
+    } catch (e) {
+      this.log.warn(`Błąd wybierania sadzonki: ${e.message}`);
+      return 0;
+    }
+    
+    // Krok 3: Znajdź wszystkie wolne pola i kliknij na każde
+    let plantedCount = 0;
+    
+    try {
+      // Pobierz informacje o wszystkich polach
+      const fieldsInfo = await page.$$eval('#gardenarea .feld', (fields) => {
+        return fields.map((field, index) => {
+          const innerField = field.querySelector(`[id^="f"]`);
+          if (!innerField) return { index, isEmpty: false, isObstacle: false };
+          
+          const style = innerField.getAttribute('style') || '';
+          const bgMatch = style.match(/background[^;]*url\(['"]?([^'")\s]+)['"]?\)/i);
+          const bgUrl = bgMatch ? bgMatch[1] : '';
+          
+          // Sprawdź czy pole jest puste (/0.gif lub brak tła)
+          const isEmpty = bgUrl.includes('/0.gif') || bgUrl === '';
+          
+          // Sprawdź czy to przeszkoda
+          const isObstacle = bgUrl.includes('steine') || 
+                            bgUrl.includes('unkraut') || 
+                            bgUrl.includes('baumstumpf') || 
+                            bgUrl.includes('maulwurf');
+          
+          return {
+            index,
+            innerId: innerField.id,
+            isEmpty,
+            isObstacle,
+            bgUrl
+          };
+        });
+      });
+      
+      // Filtruj tylko puste pola (bez przeszkód)
+      const emptyFields = fieldsInfo.filter(f => f.isEmpty && !f.isObstacle);
+      this.log.info(`Znaleziono ${emptyFields.length} pustych pól do zasadzenia`);
+      
+      // Kliknij na każde puste pole
+      for (const fieldInfo of emptyFields) {
+        try {
+          const fieldEl = await page.$(`#${fieldInfo.innerId}`);
+          if (fieldEl) {
+            await fieldEl.click();
+            await this.session.randomDelay(150, 300);
+            plantedCount++;
+          }
+        } catch (e) {
+          this.log.debug(`Błąd sadzenia na polu ${fieldInfo.index}: ${e.message}`);
+        }
+      }
+      
+    } catch (e) {
+      this.log.warn(`Błąd pobierania pól: ${e.message}`);
+    }
+    
+    this.log.info(`[NON-PREMIUM] Posadzono ${plantedCount} roślin`);
+    return plantedCount;
+  }
+
+  /**
+   * Próbuje usunąć przeszkodę z pola (chwasty, kamienie, etc.)
+   * Sprawdza koszt i porównuje z dostępnymi pieniędzmi
+   */
+  async tryToClearObstacle(fieldIndex) {
+    const page = this.session.page;
+    
+    try {
+      // Najpierw zamknij wszelkie otwarte popupy
+      await this.closeFundPopup();
+      await this.session.closePopups();
+      await this.session.randomDelay(200, 400);
+      
+      // Kliknij na pole z przeszkodą
+      const field = await page.$(`#f${fieldIndex}`);
+      if (!field) return false;
+      
+      await field.click();
+      await this.session.randomDelay(800, 1200);
+      
+      // Sprawdź czy pojawił się globalbox z informacją o koszcie
+      const globalBox = await page.$('#globalbox');
+      if (!globalBox) {
+        // Może przeszkoda została już usunięta lub to nie przeszkoda
+        await this.closeFundPopup();
+        return false;
+      }
+      
+      const isVisible = await page.evaluate(el => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }, globalBox);
+      
+      if (!isVisible) {
+        await this.closeFundPopup();
+        return false;
+      }
+      
+      // Pobierz tekst z globalbox_content
+      const content = await page.$eval('#globalbox_content', el => el.innerText).catch(() => '');
+      
+      // Szukaj kosztu (format: "XX.XXX ft" lub "XX ft")
+      const costMatch = content.match(/([\d.,]+)\s*ft/i);
+      if (!costMatch) {
+        // Brak informacji o koszcie - może być darmowe, spróbuj zaakceptować
+        await this.acceptGlobalBoxIfVisible();
+        await this.session.randomDelay(500, 800);
+        await this.closeFundPopup();
+        return true;
+      }
+      
+      // Parsuj koszt (format niemiecki: 1.234,56)
+      const costStr = costMatch[1].replace(/\./g, '').replace(',', '.');
+      const cost = parseFloat(costStr);
+      
+      // Sprawdź czy stać nas
+      if (this.playerInfo && this.playerInfo.money >= cost) {
+        this.log.info(`Usuwam przeszkodę za ${cost} ft`);
+        await this.acceptGlobalBoxIfVisible();
+        await this.session.randomDelay(800, 1200);
+        
+        // Zamknij popup ze znalezioną gotówką jeśli się pojawił
+        await this.closeFundPopup();
+        await this.session.randomDelay(300, 500);
+        
+        return true;
+      } else {
+        this.log.debug(`Brak funduszy na usunięcie przeszkody (koszt: ${cost} ft, mamy: ${this.playerInfo?.money || 0} ft)`);
+        // Zamknij okno
+        const cancelBtn = await page.$('#globalbox_button2');
+        if (cancelBtn) {
+          await cancelBtn.click();
+          await this.session.randomDelay(300, 500);
+        }
+        return false;
+      }
+      
+    } catch (e) {
+      this.log.debug(`Błąd przy usuwaniu przeszkody: ${e.message}`);
+      await this.closeFundPopup();
+      return false;
+    }
+  }
+
+  /**
+   * Zamyka popup "Znalazłeś gotówkę" który pojawia się po usunięciu niektórych przeszkód
+   */
+  async closeFundPopup() {
+    const page = this.session.page;
+    
+    try {
+      const fundPopup = await page.$('#fundpopup');
+      if (fundPopup) {
+        const isVisible = await page.evaluate(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none';
+        }, fundPopup);
+        
+        if (isVisible) {
+          // Kliknij X aby zamknąć
+          const closeImg = await page.$('#fundpopup img.link');
+          if (closeImg) {
+            await closeImg.click();
+            this.log.debug('Zamknięto popup ze znalezioną gotówką');
+            await this.session.randomDelay(300, 500);
+          }
+        }
+      }
+    } catch (e) {
+      // Ignoruj błędy
+    }
+  }
+
+  /**
+   * Znajduje pierwszą przeszkodę w budynku
+   * @returns {Object|null} Dane przeszkody lub null
+   */
+  async findFirstObstacle() {
+    const page = this.session.page;
+    
+    try {
+      const obstacle = await page.$$eval('#gardenarea .feld', (fields) => {
+        for (let index = 0; index < fields.length; index++) {
+          const field = fields[index];
+          const innerField = field.querySelector('[id^="f"]');
+          if (innerField) {
+            const style = innerField.getAttribute('style') || '';
+            const bgMatch = style.match(/background:url\(['"]?([^'"]+)['"]?\)/);
+            if (bgMatch) {
+              const bgUrl = bgMatch[1].toLowerCase();
+              // Sprawdź czy to przeszkoda
+              if (bgUrl.includes('unkraut') ||    // chwasty
+                  bgUrl.includes('steine') ||     // kamienie  
+                  bgUrl.includes('baumstumpf') || // pniaki
+                  bgUrl.includes('maulwurf')) {   // kretowisko
+                return {
+                  index: index + 1,
+                  fieldId: field.id,
+                  innerId: innerField.id,
+                  type: bgUrl.includes('unkraut') ? 'chwasty' :
+                        bgUrl.includes('steine') ? 'kamienie' :
+                        bgUrl.includes('baumstumpf') ? 'pniaki' : 'kretowisko'
+                };
+              }
+            }
+          }
+        }
+        return null;
+      });
+      
+      return obstacle;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Liczy przeszkody w budynku
+   * @returns {number} Liczba przeszkód
+   */
+  async countObstacles() {
+    const page = this.session.page;
+    
+    try {
+      const count = await page.$$eval('#gardenarea .feld', (fields) => {
+        let count = 0;
+        fields.forEach((field) => {
+          const innerField = field.querySelector('[id^="f"]');
+          if (innerField) {
+            const style = innerField.getAttribute('style') || '';
+            const bgMatch = style.match(/background:url\(['"]?([^'"]+)['"]?\)/);
+            if (bgMatch) {
+              const bgUrl = bgMatch[1].toLowerCase();
+              if (bgUrl.includes('unkraut') || bgUrl.includes('steine') || 
+                  bgUrl.includes('baumstumpf') || bgUrl.includes('maulwurf')) {
+                count++;
+              }
+            }
+          }
+        });
+        return count;
+      });
+      
+      return count;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /**
+   * Czyści wszystkie przeszkody (chwasty, kamienie, korzenie) w aktualnym budynku
+   * Przeszkody mają specyficzne tła: unkraut (chwasty), steine (kamienie), baumstumpf (pniaki)
+   * Używa podejścia "znajdź i usuń jedną" aby uniknąć problemów ze starym DOM
+   */
+  async clearObstaclesInCurrentBuilding() {
+    const page = this.session.page;
+    this.log.info('Sprawdzam pola pod kątem przeszkód (chwasty, kamienie, pniaki)...');
+    
+    let clearedCount = 0;
+    let failedAttempts = 0;
+    const maxFailedAttempts = 3; // Po 3 nieudanych próbach z rzędu przerywamy
+    
+    try {
+      // Najpierw policz ile jest przeszkód
+      const initialCount = await this.countObstacles();
+      
+      if (initialCount === 0) {
+        this.log.debug('Brak przeszkód do usunięcia');
+        return 0;
+      }
+      
+      this.log.info(`Znaleziono ${initialCount} przeszkód do usunięcia`);
+      
+      // Usuwaj przeszkody jedna po drugiej, za każdym razem szukając pierwszej
+      // To zapewnia że zawsze pracujemy z aktualnym DOM
+      while (failedAttempts < maxFailedAttempts) {
+        // Zamknij wszelkie popupy przed szukaniem
+        await this.closeFundPopup();
+        await this.session.closePopups();
+        
+        // Znajdź pierwszą przeszkodę
+        const obstacle = await this.findFirstObstacle();
+        
+        if (!obstacle) {
+          // Nie ma więcej przeszkód
+          this.log.debug('Nie znaleziono więcej przeszkód');
+          break;
+        }
+        
+        this.log.debug(`Usuwam ${obstacle.type} z pola ${obstacle.index}...`);
+        const cleared = await this.tryToClearObstacle(obstacle.index);
+        
+        if (cleared) {
+          clearedCount++;
+          failedAttempts = 0; // Reset licznika błędów
+          this.log.info(`Usunięto ${obstacle.type} z pola ${obstacle.index}`);
+        } else {
+          failedAttempts++;
+          this.log.debug(`Nie udało się usunąć ${obstacle.type} z pola ${obstacle.index} (próba ${failedAttempts}/${maxFailedAttempts})`);
+          
+          // Może brakuje pieniędzy - sprawdź czy są jeszcze inne przeszkody
+          if (failedAttempts >= maxFailedAttempts) {
+            this.log.info('Przerywam usuwanie przeszkód - zbyt wiele nieudanych prób');
+          }
+        }
+        
+        // Krótka przerwa między przeszkodami
+        await this.session.randomDelay(300, 500);
+      }
+      
+    } catch (e) {
+      this.log.debug(`Błąd podczas czyszczenia przeszkód: ${e.message}`);
+    }
+    
+    // Końcowe sprzątanie popupów
+    await this.closeFundPopup();
+    await this.session.closePopups();
+    
+    if (clearedCount > 0) {
+      this.log.info(`Usunięto ${clearedCount} przeszkód w budynku`);
+    }
+    
+    return clearedCount;
+  }
+
+  /**
+   * Szuka sadzonki na regałach w oknie wyboru roślin
+   */
+  async selectSeedFromRacks(cropName) {
+    const page = this.session.page;
+    
+    // Przeszukaj regały 1, 2, 3
+    for (let rack = 1; rack <= 3; rack++) {
+      try {
+        // Kliknij na zakładkę regału
+        const rackTab = await page.$(`#rackswitch${rack}`);
+        if (rackTab) {
+          await rackTab.click();
+          await this.session.randomDelay(300, 500);
+        }
+        
+        // Szukaj sadzonki na tym regale
+        const items = await page.$$('.rackitem');
+        for (const item of items) {
+          const tooltip = await page.evaluate(el => {
+            const headline = el.querySelector('.headline');
+            return headline ? headline.innerText : '';
+          }, item);
+          
+          if (tooltip.includes(cropName)) {
+            await item.click();
+            await this.session.randomDelay(200, 400);
+            return true;
+          }
+        }
+      } catch (e) {
+        this.log.debug(`Błąd przy szukaniu na regale ${rack}: ${e.message}`);
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -836,7 +1957,7 @@ export class FarmModule {
    */
   async fullFarmCycle(options = {}) {
     const {
-      farms = [1, 2, 3, 4],
+      farms = null, // null = użyj farm z konfiguracji, nie wszystkich 4
       harvest = true,
       plant = true,
       water = true,
@@ -857,22 +1978,44 @@ export class FarmModule {
       }
     }
     
+    // Określ które farmy iterować - tylko te z konfiguracji lub podane w opcjach
+    let farmsToProcess = farms;
+    if (!farmsToProcess && farmConfig) {
+      // Pobierz numery farm z konfiguracji (np. jeśli jest farm1 i farm2, to [1, 2])
+      farmsToProcess = [];
+      for (let i = 1; i <= 4; i++) {
+        if (farmConfig[`farm${i}`]) {
+          farmsToProcess.push(i);
+        }
+      }
+      if (farmsToProcess.length === 0) {
+        farmsToProcess = [1]; // fallback do farmy 1
+      }
+      this.log.info(`Iteruję przez farmy z konfiguracji: ${farmsToProcess.join(', ')}`);
+    } else if (!farmsToProcess) {
+      farmsToProcess = [1]; // fallback jeśli brak konfiguracji
+    }
+    
     const results = {
       harvested: 0,
       planted: 0,
       watered: 0,
     };
     
-    for (const farmNum of farms) {
+    for (const farmNum of farmsToProcess) {
       this.log.info(`--- Farma ${farmNum} ---`);
       
-      // Określ roślinę dla tej farmy
-      let farmCrop = cropType || 'zboze'; // domyślnie zboże
+      // Określ roślinę dla tej farmy - rozwiąż ID na nazwę
+      let farmCropId = cropType || '1'; // domyślnie zboże (ID 1)
       if (!cropType && farmConfig) {
         const farmKey = `farm${farmNum}`;
-        farmCrop = farmConfig[farmKey] || 'zboze';
-        this.log.info(`Farma ${farmNum}: wybrana roślina "${farmCrop}" z konfiguracji`);
+        farmCropId = farmConfig[farmKey] || '1';
       }
+      
+      // Rozwiąż ID rośliny na nazwę wyświetlaną w grze
+      const cropId = parseInt(farmCropId) || 1;
+      const farmCropName = CROP_ID_TO_NAME[cropId] || 'Zboże';
+      this.log.info(`Farma ${farmNum}: wybrana roślina "${farmCropName}" (ID: ${cropId})`);
       
       // Przejdź do farmy
       const navigated = await this.navigateToFarm(farmNum);
@@ -884,6 +2027,13 @@ export class FarmModule {
       // Sprawdź stan wszystkich budynków PRZED wchodzeniem
       this.log.info(`Sprawdzam stan budynków na farmie ${farmNum}...`);
       const buildingStatuses = await this.getAllBuildingsStatus();
+      
+      // Sprawdź czy wszystkie budynki są zablokowane - jeśli tak, pomiń farmę
+      const allLocked = buildingStatuses.every(s => s.status === 'locked');
+      if (allLocked) {
+        this.log.info(`Farma ${farmNum}: wszystkie budynki zablokowane, pomijam całą farmę`);
+        continue;
+      }
       
       // Przejdź przez wszystkie 6 budynków
       for (let pos = 1; pos <= 6; pos++) {
@@ -915,34 +2065,73 @@ export class FarmModule {
         
         await this.session.closePopups();
         
+        // NAJPIERW: Usuń przeszkody (chwasty, kamienie, pniaki) przed zbieraniem/sadzeniem
+        const obstaclesCleared = await this.clearObstaclesInCurrentBuilding();
+        if (obstaclesCleared > 0) {
+          this.log.info(`Wyczyszczono ${obstaclesCleared} przeszkód w budynku ${pos}`);
+        }
+        
         // Zbieranie - tylko jeśli status był 'ready' lub nieznany
         if (harvest && (!status || status.status === 'ready' || status.status === 'unknown')) {
-          const h = await this.harvestInCurrentBuilding();
+          let h = await this.harvestInCurrentBuilding();
           results.harvested += h;
           if (h > 0) this.log.info(`Zebrano ${h} plonów`);
+          
+          // WERYFIKACJA: Sprawdź czy nie pominięto żadnych pól do zebrania
+          await this.session.randomDelay(300, 500);
+          const missedHarvest = await this.harvestInCurrentBuilding();
+          if (missedHarvest > 0) {
+            this.log.info(`Weryfikacja zbierania: zebrano dodatkowo ${missedHarvest} pominiętych pól`);
+            results.harvested += missedHarvest;
+          }
         }
         
         // Sadzenie - tylko jeśli status był 'empty', 'ready' (po zebraniu) lub nieznany
         let planted = 0;
         if (plant && (!status || status.status === 'empty' || status.status === 'ready' || status.status === 'unknown')) {
-          planted = await this.plantInCurrentBuilding(farmCrop);
+          planted = await this.plantInCurrentBuilding(farmCropName);
           results.planted += planted;
           if (planted > 0) this.log.info(`Posadzono ${planted} roślin`);
+          
+          // WERYFIKACJA: Sprawdź czy nie pominięto żadnych pól do zasadzenia
+          await this.session.randomDelay(300, 500);
+          const missedPlant = await this.plantInCurrentBuilding(farmCropName);
+          if (missedPlant > 0) {
+            this.log.info(`Weryfikacja sadzenia: posadzono dodatkowo ${missedPlant} pominiętych pól`);
+            planted += missedPlant;
+            results.planted += missedPlant;
+          }
         }
         
         // Podlewanie - TYLKO jeśli posadzono rośliny w tym budynku
         this.log.info(`DEBUG podlewanie: water=${water}, planted=${planted}`);
         if (water && planted > 0) {
           this.log.info('Wywołuję waterInCurrentBuilding()...');
-          const w = await this.waterInCurrentBuilding();
+          let w = await this.waterInCurrentBuilding();
           results.watered += w;
           if (w > 0) this.log.info(`Podlano ${w} pól`);
+          
+          // WERYFIKACJA: Sprawdź czy nie pominięto żadnych pól do podlania
+          await this.session.randomDelay(300, 500);
+          const missedWater = await this.waterInCurrentBuilding();
+          if (missedWater > 0) {
+            this.log.info(`Weryfikacja podlewania: podlano dodatkowo ${missedWater} pominiętych pól`);
+            results.watered += missedWater;
+          }
+          
+          // Poczekaj sekundę przed przejściem do kolejnego budynku
+          this.log.debug('Czekam 1 sekundę po podlaniu...');
+          await this.session.randomDelay(1000, 1200);
         }
         
         // Wróć do widoku farmy
         await this.exitBuilding();
         await this.session.randomDelay(500, 1000);
       }
+      
+      // Dodatkowa pauza między farmami
+      this.log.debug('Czekam 1 sekundę przed przejściem do kolejnej farmy...');
+      await this.session.randomDelay(1000, 1500);
     }
     
     this.log.info('=== Podsumowanie cyklu farmy ===');
@@ -956,26 +2145,59 @@ export class FarmModule {
 
   /**
    * Pobiera live status wszystkich pól (czasy do zbioru)
+   * Zwraca też informacje o zablokowanych budynkach dla frontendu
    * Format timerów: #farm_production_timer{farmNum}_{fieldNum}
    * Zawartość: "Gotowe!" lub czas np. "02:15:30"
+   * @param {Array<number>|null} farmNumbers - opcjonalna tablica numerów farm do sprawdzenia (domyślnie [1,2,3,4])
    */
-  async getAllFieldsStatus() {
-    this.log.info('Pobieranie statusu pól...');
+  async getAllFieldsStatus(farmNumbers = null) {
+    const farmsToCheck = farmNumbers || [1, 2, 3, 4];
+    this.log.info(`Pobieranie statusu pól dla farm: ${farmsToCheck.join(', ')}...`);
     
     const page = this.session.page;
     const fieldsStatus = [];
     
-    // Sprawdź farmy 1-4, pola 1-6
-    for (let farmNum = 1; farmNum <= 4; farmNum++) {
+    // Sprawdź wybrane farmy
+    for (const farmNum of farmsToCheck) {
       // Nawiguj do farmy
       const navigated = await this.navigateToFarm(farmNum);
-      if (!navigated) continue;
+      if (!navigated) {
+        // Nie udało się nawigować - oznacz całą farmę jako locked
+        for (let fieldNum = 1; fieldNum <= 6; fieldNum++) {
+          fieldsStatus.push({
+            farm: farmNum,
+            field: fieldNum,
+            status: 'locked',
+            timeLeft: null,
+            plantType: null,
+            raw: 'Farma zablokowana',
+          });
+        }
+        continue;
+      }
       
       await this.session.closePopups();
       await this.session.randomDelay(500, 1000);
       
+      // Sprawdź stan budynków na tej farmie
+      const buildingStatuses = await this.getAllBuildingsStatus();
+      
       for (let fieldNum = 1; fieldNum <= 6; fieldNum++) {
         try {
+          // Sprawdź czy budynek jest zablokowany
+          const buildingStatus = buildingStatuses.find(b => b.position === fieldNum);
+          if (buildingStatus && buildingStatus.status === 'locked') {
+            fieldsStatus.push({
+              farm: farmNum,
+              field: fieldNum,
+              status: 'locked',
+              timeLeft: null,
+              plantType: null,
+              raw: 'Budynek zablokowany',
+            });
+            continue;
+          }
+          
           const timerId = `#farm_production_timer${farmNum}_${fieldNum}`;
           const timerDiv = await page.$(timerId);
           
@@ -1025,6 +2247,16 @@ export class FarmModule {
                 raw: cleanText,
               });
             }
+          } else {
+            // Brak timera - budynek jest pusty lub nie ma uprawy
+            fieldsStatus.push({
+              farm: farmNum,
+              field: fieldNum,
+              status: 'empty',
+              timeLeft: null,
+              plantType: null,
+              raw: 'Puste',
+            });
           }
         } catch (e) {
           this.log.debug(`Błąd sprawdzania pola ${farmNum}_${fieldNum}: ${e.message}`);
@@ -1032,7 +2264,7 @@ export class FarmModule {
       }
     }
     
-    this.log.info(`Znaleziono ${fieldsStatus.length} aktywnych pól`);
+    this.log.info(`Znaleziono ${fieldsStatus.length} pól (w tym locked/empty)`);
     return fieldsStatus;
   }
 
@@ -1058,6 +2290,47 @@ export class FarmModule {
       23: 'Szpinak',
       24: 'Kalafiory',
       26: 'Ziemniaki',
+      29: 'Szparagi',
+      31: 'Cukinie',
+      32: 'Jagody',
+      33: 'Maliny',
+      34: 'Porzeczki',
+      35: 'Jeżyny',
+      36: 'Mirabelki',
+      37: 'Jabłka',
+      38: 'Dynie',
+      39: 'Gruszki',
+      40: 'Wiśnie',
+      41: 'Śliwki',
+      42: 'Orzechy włoskie',
+      43: 'Oliwki',
+      44: 'Czosnek',
+      45: 'Czerwona kapusta',
+      46: 'Chili',
+      47: 'Kalarepa',
+      48: 'Mlecz',
+      49: 'Bazylia',
+      50: 'Borowiki',
+      51: 'Dalia',
+      52: 'Rabarbar',
+      53: 'Arbuzy',
+      54: 'Brokuły',
+      55: 'Fasola',
+      56: 'Oberżyna',
+      57: 'Papryka',
+      58: 'Groch',
+      59: 'Seler',
+      60: 'Awokado',
+      61: 'Por',
+      62: 'Brukselka',
+      63: 'Koper',
+      97: 'Gwiazdka betlejemska',
+      104: 'Żonkil',
+      107: 'Winogrona',
+      108: 'Bodziszki',
+      109: 'Stokrotki',
+      129: 'Herbata',
+      158: 'Pomarańczowy tulipan',
     };
     return plants[id] || `Roślina ${id}`;
   }

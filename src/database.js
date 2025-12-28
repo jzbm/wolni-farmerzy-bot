@@ -190,6 +190,14 @@ export function initDatabase() {
     // Kolumna już istnieje - ignoruj
   }
   
+  // Migracja: dodaj kolumnę scheduler_cache_interval (interwał sprawdzania cache w smart mode)
+  try {
+    db.exec(`ALTER TABLE automation_settings ADD COLUMN scheduler_cache_interval INTEGER DEFAULT 60`);
+    logger.info('Dodano kolumnę scheduler_cache_interval');
+  } catch (e) {
+    // Kolumna już istnieje - ignoruj
+  }
+  
   // Tabela cache statusu gry
   db.exec(`
     CREATE TABLE IF NOT EXISTS game_status_cache (
@@ -198,11 +206,19 @@ export function initDatabase() {
       fields_status TEXT,
       stalls_status TEXT,
       forestry_status TEXT,
+      player_info TEXT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (account_id) REFERENCES game_accounts(id) ON DELETE CASCADE,
       UNIQUE(account_id)
     )
   `);
+
+  // Migracja - dodanie kolumny player_info jeśli nie istnieje
+  try {
+    db.exec(`ALTER TABLE game_status_cache ADD COLUMN player_info TEXT`);
+  } catch (e) {
+    // Kolumna już istnieje
+  }
 
   // Tabela ustawień globalnych aplikacji
   db.exec(`
@@ -575,7 +591,8 @@ export function getSchedulerConfig(accountId) {
       scheduler_forestry_interval,
       scheduler_stalls_interval,
       scheduler_smart_mode,
-      scheduler_active
+      scheduler_active,
+      scheduler_cache_interval
     FROM automation_settings WHERE account_id = ?
   `);
   const result = stmt.get(accountId);
@@ -584,7 +601,8 @@ export function getSchedulerConfig(accountId) {
     scheduler_forestry_interval: 0,
     scheduler_stalls_interval: 0,
     scheduler_smart_mode: 0,
-    scheduler_active: 0
+    scheduler_active: 0,
+    scheduler_cache_interval: 60
   };
 }
 
@@ -595,7 +613,8 @@ export function updateSchedulerConfig(accountId, config) {
       scheduler_forestry_interval = ?,
       scheduler_stalls_interval = ?,
       scheduler_smart_mode = ?,
-      scheduler_active = ?
+      scheduler_active = ?,
+      scheduler_cache_interval = ?
     WHERE account_id = ?
   `);
   return stmt.run(
@@ -604,6 +623,7 @@ export function updateSchedulerConfig(accountId, config) {
     config.stallsInterval || 0,
     config.smartMode ? 1 : 0,
     config.active !== undefined ? (config.active ? 1 : 0) : 1,
+    config.cacheInterval || 60,
     accountId
   );
 }
@@ -623,7 +643,8 @@ export function getActiveSchedulerConfigs() {
       asm.scheduler_farm_interval,
       asm.scheduler_forestry_interval,
       asm.scheduler_stalls_interval,
-      asm.scheduler_smart_mode
+      asm.scheduler_smart_mode,
+      asm.scheduler_cache_interval
     FROM game_accounts ga
     JOIN automation_settings asm ON ga.id = asm.account_id
     WHERE asm.scheduler_active = 1
@@ -641,25 +662,27 @@ export function getActiveSchedulerConfigs() {
 
 export function saveGameStatusCache(accountId, status) {
   const stmt = db.prepare(`
-    INSERT INTO game_status_cache (account_id, fields_status, stalls_status, forestry_status, updated_at)
-    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO game_status_cache (account_id, fields_status, stalls_status, forestry_status, player_info, updated_at)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(account_id) DO UPDATE SET
       fields_status = excluded.fields_status,
       stalls_status = excluded.stalls_status,
       forestry_status = excluded.forestry_status,
+      player_info = excluded.player_info,
       updated_at = CURRENT_TIMESTAMP
   `);
   return stmt.run(
     accountId,
     JSON.stringify(status.fieldsStatus || null),
     JSON.stringify(status.stallsStatus || null),
-    JSON.stringify(status.forestryStatus || null)
+    JSON.stringify(status.forestryStatus || null),
+    JSON.stringify(status.playerInfo || null)
   );
 }
 
 export function getGameStatusCache(accountId) {
   const stmt = db.prepare(`
-    SELECT fields_status, stalls_status, forestry_status, updated_at
+    SELECT fields_status, stalls_status, forestry_status, player_info, updated_at
     FROM game_status_cache WHERE account_id = ?
   `);
   const result = stmt.get(accountId);
@@ -669,6 +692,7 @@ export function getGameStatusCache(accountId) {
     fieldsStatus: result.fields_status ? JSON.parse(result.fields_status) : null,
     stallsStatus: result.stalls_status ? JSON.parse(result.stalls_status) : null,
     forestryStatus: result.forestry_status ? JSON.parse(result.forestry_status) : null,
+    playerInfo: result.player_info ? JSON.parse(result.player_info) : { level: 1, gold: 0, cash: 0, name: '' },
     updatedAt: result.updated_at
   };
 }

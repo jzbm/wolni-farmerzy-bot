@@ -103,6 +103,19 @@ export class BrowserSession {
       '#loginbonusbox .mini_close',
       '[onclick*="loginbonus.close"]',
       
+      // Bonuspack / Skrzynia premium - okno z ofertą
+      '#bonuspack .mini_close',
+      '#bonuspack_inner .mini_close',
+      '[onclick*="bonuspack.close"]',
+      
+      // Profil użytkownika - może się otworzyć przypadkowo
+      '#profil_main .mini_close',
+      '[onclick*="profilClose"]',
+      
+      // Fundpopup - znaleziona gotówka po usunięciu przeszkody
+      '#fundpopup img.link',
+      '#fundpopup [onclick*="fundpopup"]',
+      
       // UWAGA: NIE dodawaj tutaj .big_close.link ani .mini_close.link
       // bo to zamyka też okna budynków!
       

@@ -86,32 +86,71 @@ const CARPENTRY_PRODUCTS = [
   { id: 215, name: 'Krosno' },
 ];
 
-// Lista roślin farmy
+// Lista roślin farmy z ID gry i wymaganym poziomem
 const FARM_CROPS = [
-  { id: 'zboze', name: 'Zboże', time: '10 min' },
-  { id: 'kukurydza', name: 'Kukurydza', time: '15 min' },
-  { id: 'koniczyna', name: 'Koniczyna', time: '2h' },
-  { id: 'rzepak', name: 'Rzepak', time: '4h' },
-  { id: 'buraki', name: 'Buraki cukrowe', time: '10h' },
-  { id: 'ziola', name: 'Zioła', time: '6h' },
-  { id: 'sloneczniki', name: 'Słoneczniki', time: '12h' },
-  { id: 'blawatki', name: 'Bławatki', time: '24h' },
-  { id: 'marchewki', name: 'Marchewki', time: '35 min' },
-  { id: 'ogorki', name: 'Ogórki', time: '1h 15min' },
-  { id: 'rzodkiewki', name: 'Rzodkiewki', time: '20 min' },
-  { id: 'truskawki', name: 'Truskawki', time: '45 min' },
-  { id: 'pomidory', name: 'Pomidory', time: '2h' },
-  { id: 'cebule', name: 'Cebule', time: '3h' },
-  { id: 'szpinak', name: 'Szpinak', time: '1h 30min' },
-  { id: 'kalafiory', name: 'Kalafiory', time: '6h' },
-  { id: 'ziemniaki', name: 'Ziemniaki', time: '4h' },
-  { id: 'szparagi', name: 'Szparagi', time: '8h' },
-  { id: 'cukinie', name: 'Cukinie', time: '5h' },
-  { id: 'jagody', name: 'Jagody', time: '4h' },
-  { id: 'maliny', name: 'Maliny', time: '3h' },
-  { id: 'jablka', name: 'Jabłka', time: '12h' },
-  { id: 'dynie', name: 'Dynie', time: '24h' },
+  { id: 1, name: 'Zboże', time: '00:20', level: 1 },
+  { id: 17, name: 'Marchewki', time: '00:15', level: 1 },
+  { id: 18, name: 'Ogórki', time: '01:30', level: 3 },
+  { id: 20, name: 'Truskawki', time: '08:00', level: 4 },
+  { id: 2, name: 'Kukurydza', time: '00:45', level: 6 },
+  { id: 19, name: 'Rzodkiewki', time: '04:00', level: 7 },
+  { id: 21, name: 'Pomidory', time: '10:00', level: 8 },
+  { id: 22, name: 'Cebule', time: '08:20', level: 9 },
+  { id: 23, name: 'Szpinak', time: '13:20', level: 10 },
+  { id: 3, name: 'Koniczyna', time: '00:45', level: 11 },
+  { id: 4, name: 'Rzepak', time: '01:30', level: 12 },
+  { id: 24, name: 'Kalafiory', time: '12:00', level: 13 },
+  { id: 5, name: 'Buraki pastewne', time: '02:00', level: 14 },
+  { id: 6, name: 'Zioła', time: '04:00', level: 15 },
+  { id: 109, name: 'Stokrotki', time: '02:15', level: 15 },
+  { id: 108, name: 'Bodziszki', time: '06:00', level: 16 },
+  { id: 26, name: 'Ziemniaki', time: '13:00', level: 17 },
+  { id: 7, name: 'Słoneczniki', time: '08:00', level: 19 },
+  { id: 8, name: 'Bławatki', time: '16:00', level: 20 },
+  { id: 29, name: 'Szparagi', time: '15:50', level: 22 },
+  { id: 31, name: 'Cukinie', time: '16:40', level: 24 },
+  { id: 32, name: 'Jagody', time: '12:00', level: 25 },
+  { id: 33, name: 'Maliny', time: '20:00', level: 26 },
+  { id: 34, name: 'Porzeczki', time: '13:20', level: 27 },
+  { id: 35, name: 'Jeżyny', time: '33:20', level: 28 },
+  { id: 36, name: 'Mirabelki', time: '14:40', level: 29 },
+  { id: 37, name: 'Jabłka', time: '50:00', level: 30 },
+  { id: 38, name: 'Dynie', time: '16:00', level: 31 },
+  { id: 39, name: 'Gruszki', time: '66:40', level: 32 },
+  { id: 40, name: 'Wiśnie', time: '80:00', level: 33 },
+  { id: 41, name: 'Śliwki', time: '91:40', level: 34 },
+  { id: 42, name: 'Orzechy włoskie', time: '103:20', level: 35 },
+  { id: 44, name: 'Czosnek', time: '24:00', level: 35 },
+  { id: 43, name: 'Oliwki', time: '113:20', level: 36 },
+  { id: 45, name: 'Czerwona kapusta', time: '120:00', level: 37 },
+  { id: 46, name: 'Chili', time: '28:00', level: 37 },
+  { id: 47, name: 'Kalarepa', time: '24:00', level: 37 },
+  { id: 48, name: 'Mlecz', time: '32:00', level: 37 },
+  { id: 49, name: 'Bazylia', time: '09:00', level: 38 },
+  { id: 50, name: 'Borowiki', time: '85:00', level: 39 },
+  { id: 51, name: 'Dalia', time: '106:40', level: 46 },
+  { id: 52, name: 'Rabarbar', time: '123:20', level: 47 },
+  { id: 53, name: 'Arbuzy', time: '130:00', level: 48 },
+  { id: 54, name: 'Brokuły', time: '19:00', level: 49 },
+  { id: 55, name: 'Fasola', time: '120:00', level: 49 },
+  { id: 56, name: 'Oberżyna', time: '48:00', level: 49 },
+  { id: 57, name: 'Papryka', time: '20:00', level: 49 },
+  { id: 58, name: 'Groch', time: '115:00', level: 50 },
+  { id: 59, name: 'Seler', time: '85:00', level: 50 },
+  { id: 60, name: 'Awokado', time: '130:00', level: 51 },
+  { id: 61, name: 'Por', time: '48:00', level: 51 },
+  { id: 62, name: 'Brukselka', time: '43:00', level: 52 },
+  { id: 63, name: 'Koper', time: '85:00', level: 52 },
+  // Rośliny specjalne/eventowe
+  { id: 97, name: 'Gwiazdka betlejemska', time: '12:00', level: 0 },
+  { id: 104, name: 'Żonkil', time: '12:20', level: 0 },
+  { id: 107, name: 'Winogrona', time: '11:40', level: 0 },
+  { id: 129, name: 'Herbata', time: '10:40', level: 1 },
+  { id: 158, name: 'Pomarańczowy tulipan', time: '10:00', level: 1 },
 ];
+
+// Aktualny poziom gracza (domyślnie 1, pobierany z gry)
+let playerLevel = 1;
 
 let selectedAccountId = null;
 let currentStallsConfig = null;
@@ -129,11 +168,17 @@ function getStatusCache(accountId) {
   try {
     const key = `gameStatus_${accountId}`;
     const cached = localStorage.getItem(key);
-    if (cached) {
-      return JSON.parse(cached);
+    if (cached && cached !== 'undefined' && cached !== 'null') {
+      const parsed = JSON.parse(cached);
+      // Sprawdź czy to prawidłowy obiekt cache
+      if (parsed && typeof parsed === 'object' && parsed.data) {
+        return parsed;
+      }
     }
   } catch (e) {
     console.error('Błąd odczytu cache:', e);
+    // Usuń uszkodzony cache
+    localStorage.removeItem(`gameStatus_${accountId}`);
   }
   return null;
 }
@@ -178,28 +223,221 @@ async function api(method, url, data = null) {
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
+  if (!container) {
+    console.error('Toast container not found');
+    return;
+  }
   const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
+  toast.className = `toast ${type}`;
   toast.textContent = message;
   container.appendChild(toast);
   
-  setTimeout(() => toast.classList.add('show'), 10);
+  // Force reflow to enable animation
+  toast.offsetHeight;
+  toast.classList.add('show');
+  
   setTimeout(() => {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  }, 4000);
+}
+
+// ============ REAL-TIME NOTIFICATIONS (Socket.IO) ============
+
+let socket = null;
+let notificationSound = null;
+
+/**
+ * Inicjalizuje połączenie WebSocket i powiadomienia w czasie rzeczywistym
+ */
+function initRealtimeNotifications() {
+  // Utwórz element audio dla dźwięku powiadomienia
+  notificationSound = new Audio('data:audio/wav;base64,UklGRl4DAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YToDAABkAGQAZABkAGQAZABkAGQAZABkAHgAeACWAKYAwgDSAO4A/gAaASoBRgFWAXIBggGeAa4BugHKAdYB5gHyAQICDgIeAioCOgJGAlYCYgJyAn4CjgKaAqoCrgK+AsIC0gLWAuYC6gL6Av4CDgMSAx4DIgMuAzIDPgNCA04DUgNeA2IDbgNyA34DggOOA5IDngOiA64DsgO2A7YDtgO2A7YDtgOyA64DqgOmA6IDngOaA5YDkgOOA4oDhgOCA34DegN2A3IDcgNuA24DbgNuA24DbgNuA24DcgNyA3YDdgN6A34DggOGA4oDjgOSA5YDmgOeA6IDpgOqA64DsgOyA7YDtgO2A7YDtgOyA64DqgOmA6IDngOaA5YDkgOOA4YDggN+A3oDdgNyA24DagNmA2IDXgNaA1YDUgNOA0oDRgNCA0IDPgM6AzYDMgMuAyoDJgMiAx4DGgMWAxIDDgMKAwYDAgP+AvoCAAAA');
+  notificationSound.volume = 0.5;
+  
+  // Połącz z Socket.IO
+  try {
+    socket = io();
+    
+    socket.on('connect', () => {
+      console.log('🔌 Połączono z serwerem WebSocket');
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('🔌 Rozłączono z serwerem WebSocket');
+    });
+    
+    // Nasłuchuj na powiadomienia o modułach
+    socket.on('module_started', (data) => {
+      console.log('📢 Moduł uruchomiony:', data);
+      showModuleNotification(data);
+    });
+    
+    socket.on('module_completed', (data) => {
+      console.log('✅ Moduł zakończony:', data);
+      showModuleCompletedNotification(data);
+    });
+    
+    socket.on('module_error', (data) => {
+      console.log('❌ Błąd modułu:', data);
+      showModuleErrorNotification(data);
+    });
+    
+    // Nasłuchuj na aktualizacje statusu
+    socket.on('update', (data) => {
+      console.log('📊 Aktualizacja:', data);
+      handleSocketUpdate(data);
+    });
+    
+  } catch (e) {
+    console.error('Błąd inicjalizacji Socket.IO:', e);
+  }
+}
+
+/**
+ * Subskrybuje powiadomienia dla wybranego konta
+ */
+function subscribeToAccount(accountId) {
+  if (socket && socket.connected) {
+    socket.emit('subscribe', accountId);
+    console.log(`📡 Subskrybuję powiadomienia dla konta ${accountId}`);
+  }
+}
+
+/**
+ * Wyświetla powiadomienie o uruchomieniu modułu
+ */
+function showModuleNotification(data) {
+  const { accountEmail, module, message } = data;
+  
+  const moduleIcons = {
+    'farm': '🌾',
+    'forestry': '🌲',
+    'stalls': '🏪',
+    'cycle': '🔄',
+    'status': '📊'
+  };
+  
+  const icon = moduleIcons[module] || '🤖';
+  const notificationMsg = message || `${icon} Moduł ${module} uruchomiony`;
+  
+  // Odtwórz dźwięk
+  playNotificationSound();
+  
+  // Pokaż toast
+  showToast(`${icon} [${accountEmail}] ${notificationMsg}`, 'info');
+  
+  // Pokaż natywne powiadomienie przeglądarki (jeśli dozwolone)
+  showBrowserNotification(`${icon} ${module}`, `${accountEmail}: ${notificationMsg}`);
+}
+
+/**
+ * Wyświetla powiadomienie o zakończeniu modułu
+ */
+function showModuleCompletedNotification(data) {
+  const { accountEmail, module, results } = data;
+  
+  const moduleIcons = {
+    'farm': '🌾',
+    'forestry': '🌲',
+    'stalls': '🏪',
+    'cycle': '🔄'
+  };
+  
+  const icon = moduleIcons[module] || '✅';
+  let resultMsg = '';
+  
+  if (results) {
+    if (module === 'farm' && results.harvested !== undefined) {
+      resultMsg = ` Zebrano: ${results.harvested}, Posadzono: ${results.planted}, Podlano: ${results.watered}`;
+    } else if (module === 'forestry' && results.treesHarvested !== undefined) {
+      resultMsg = ` Drzewa: ${results.treesHarvested}, Produkty: ${results.productsCollected || 0}`;
+    }
+  }
+  
+  showToast(`${icon} [${accountEmail}] Moduł ${module} zakończony!${resultMsg}`, 'success');
+}
+
+/**
+ * Wyświetla powiadomienie o błędzie modułu
+ */
+function showModuleErrorNotification(data) {
+  const { accountEmail, module, error } = data;
+  
+  showToast(`❌ [${accountEmail}] Błąd ${module}: ${error}`, 'error');
+  
+  // Odtwórz dźwięk błędu (inny ton)
+  playNotificationSound();
+}
+
+/**
+ * Odtwarza dźwięk powiadomienia
+ */
+function playNotificationSound() {
+  try {
+    if (notificationSound) {
+      notificationSound.currentTime = 0;
+      notificationSound.play().catch(e => {
+        // Przeglądarka może blokować autoplay
+        console.debug('Nie można odtworzyć dźwięku:', e.message);
+      });
+    }
+  } catch (e) {
+    console.debug('Błąd odtwarzania dźwięku:', e);
+  }
+}
+
+/**
+ * Wyświetla natywne powiadomienie przeglądarki
+ */
+function showBrowserNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, {
+        body: body,
+        icon: '/favicon.ico',
+        tag: 'wf-bot-notification'
+      });
+    } catch (e) {
+      console.debug('Błąd powiadomienia przeglądarki:', e);
+    }
+  }
+}
+
+/**
+ * Prosi o pozwolenie na powiadomienia przeglądarki
+ */
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().then(permission => {
+      console.log('Uprawnienia powiadomień:', permission);
+    });
+  }
+}
+
+/**
+ * Obsługuje aktualizacje z socketa
+ */
+function handleSocketUpdate(data) {
+  if (data.type === 'status' && selectedAccountId) {
+    // Odśwież status gry
+    refreshGameStatusFromCache();
+  }
 }
 
 // ============ INICJALIZACJA ============
 
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuth();
-  await loadAccounts();
   initProductSelects();
   initForestrySelects();
   initFarmSelects();
   initEventListeners();
-  loadSchedulerStatus();
+  initRealtimeNotifications(); // Inicjalizuj WebSocket
+  requestNotificationPermission(); // Poproś o pozwolenie na powiadomienia
+  await loadAccounts();
+  await loadSchedulerStatus();
+  await loadAppSettings();
   startStatusAutoRefresh(); // Auto-refresh statusu gry co 30 min
 });
 
@@ -231,7 +469,7 @@ function initEventListeners() {
 // ============ PRODUKTY DO STRAGANÓW ============
 
 function initProductSelects() {
-  const selects = ['stall1_slot1', 'stall1_slot2', 'stall2_slot1'];
+  const selects = ['stall1_slot1', 'stall1_slot2', 'stall2_slot1', 'stall2_slot2'];
   
   selects.forEach(selectId => {
     const select = document.getElementById(selectId);
@@ -259,6 +497,14 @@ function validateStallProducts(stallNumber) {
       showToast('W jednym straganie nie mogą być dwa takie same produkty!', 'error');
       document.getElementById('stall1_slot2').value = '';
     }
+  } else if (stallNumber === 2) {
+    const slot1 = document.getElementById('stall2_slot1').value;
+    const slot2 = document.getElementById('stall2_slot2').value;
+    
+    if (slot1 && slot2 && slot1 === slot2) {
+      showToast('W jednym straganie nie mogą być dwa takie same produkty!', 'error');
+      document.getElementById('stall2_slot2').value = '';
+    }
   }
 }
 
@@ -270,22 +516,41 @@ async function loadStallsConfig() {
     currentStallsConfig = data.config;
     
     if (currentStallsConfig) {
-      // Ustaw wartości w selectach
-      if (currentStallsConfig.stall1?.slot1) {
-        const val = JSON.stringify({ id: currentStallsConfig.stall1.slot1.productId, name: currentStallsConfig.stall1.slot1.productName });
-        setSelectValue('stall1_slot1', val);
+      // Ustaw wartości w selectach - szukaj po ID produktu
+      if (currentStallsConfig.stall1?.slot1?.productId) {
+        setSelectByProductId('stall1_slot1', currentStallsConfig.stall1.slot1.productId);
       }
-      if (currentStallsConfig.stall1?.slot2) {
-        const val = JSON.stringify({ id: currentStallsConfig.stall1.slot2.productId, name: currentStallsConfig.stall1.slot2.productName });
-        setSelectValue('stall1_slot2', val);
+      if (currentStallsConfig.stall1?.slot2?.productId) {
+        setSelectByProductId('stall1_slot2', currentStallsConfig.stall1.slot2.productId);
       }
-      if (currentStallsConfig.stall2?.slot1) {
-        const val = JSON.stringify({ id: currentStallsConfig.stall2.slot1.productId, name: currentStallsConfig.stall2.slot1.productName });
-        setSelectValue('stall2_slot1', val);
+      if (currentStallsConfig.stall2?.slot1?.productId) {
+        setSelectByProductId('stall2_slot1', currentStallsConfig.stall2.slot1.productId);
+      }
+      if (currentStallsConfig.stall2?.slot2?.productId) {
+        setSelectByProductId('stall2_slot2', currentStallsConfig.stall2.slot2.productId);
       }
     }
   } catch (error) {
     console.error('Błąd ładowania konfiguracji straganów:', error);
+  }
+}
+
+// Ustawia wartość selecta produktu po ID
+function setSelectByProductId(selectId, productId) {
+  const select = document.getElementById(selectId);
+  if (!select || !productId) return;
+  
+  for (const option of select.options) {
+    if (!option.value || option.value === '') continue;
+    try {
+      const parsed = JSON.parse(option.value);
+      if (parsed && parsed.id === productId) {
+        option.selected = true;
+        return;
+      }
+    } catch (e) {
+      // Ignoruj błędy parsowania - niektóre opcje mogą nie być JSON
+    }
   }
 }
 
@@ -311,23 +576,38 @@ async function saveStallsConfig() {
   
   // Slot 1 straganu 1
   const s1s1 = document.getElementById('stall1_slot1').value;
-  if (s1s1) {
-    const p = JSON.parse(s1s1);
-    config.stall1.slot1 = { productId: p.id, productName: p.name, enabled: true };
+  if (s1s1 && s1s1.trim() !== '') {
+    try {
+      const p = JSON.parse(s1s1);
+      config.stall1.slot1 = { productId: p.id, productName: p.name, enabled: true };
+    } catch (e) { console.error('Błąd parsowania s1s1:', e); }
   }
   
   // Slot 2 straganu 1
   const s1s2 = document.getElementById('stall1_slot2').value;
-  if (s1s2) {
-    const p = JSON.parse(s1s2);
-    config.stall1.slot2 = { productId: p.id, productName: p.name, enabled: true };
+  if (s1s2 && s1s2.trim() !== '') {
+    try {
+      const p = JSON.parse(s1s2);
+      config.stall1.slot2 = { productId: p.id, productName: p.name, enabled: true };
+    } catch (e) { console.error('Błąd parsowania s1s2:', e); }
   }
   
   // Slot 1 straganu 2
   const s2s1 = document.getElementById('stall2_slot1').value;
-  if (s2s1) {
-    const p = JSON.parse(s2s1);
-    config.stall2.slot1 = { productId: p.id, productName: p.name, enabled: true };
+  if (s2s1 && s2s1.trim() !== '') {
+    try {
+      const p = JSON.parse(s2s1);
+      config.stall2.slot1 = { productId: p.id, productName: p.name, enabled: true };
+    } catch (e) { console.error('Błąd parsowania s2s1:', e); }
+  }
+  
+  // Slot 2 straganu 2
+  const s2s2 = document.getElementById('stall2_slot2').value;
+  if (s2s2 && s2s2.trim() !== '') {
+    try {
+      const p = JSON.parse(s2s2);
+      config.stall2.slot2 = { productId: p.id, productName: p.name, enabled: true };
+    } catch (e) { console.error('Błąd parsowania s2s2:', e); }
   }
   
   try {
@@ -385,19 +665,19 @@ async function loadForestryConfig() {
       document.getElementById('forestryPreferredTree').value = data.preferredTree;
     }
     
-    // Ustaw produkty budynków
+    // Ustaw produkty budynków - konwertuj na string dla pewności
     if (currentForestryConfig) {
       if (currentForestryConfig.building1?.slot1?.productId) {
-        document.getElementById('building1_slot1').value = currentForestryConfig.building1.slot1.productId;
+        document.getElementById('building1_slot1').value = String(currentForestryConfig.building1.slot1.productId);
       }
       if (currentForestryConfig.building1?.slot2?.productId) {
-        document.getElementById('building1_slot2').value = currentForestryConfig.building1.slot2.productId;
+        document.getElementById('building1_slot2').value = String(currentForestryConfig.building1.slot2.productId);
       }
       if (currentForestryConfig.building2?.slot1?.productId) {
-        document.getElementById('building2_slot1').value = currentForestryConfig.building2.slot1.productId;
+        document.getElementById('building2_slot1').value = String(currentForestryConfig.building2.slot1.productId);
       }
       if (currentForestryConfig.building2?.slot2?.productId) {
-        document.getElementById('building2_slot2').value = currentForestryConfig.building2.slot2.productId;
+        document.getElementById('building2_slot2').value = String(currentForestryConfig.building2.slot2.productId);
       }
     }
   } catch (error) {
@@ -432,21 +712,51 @@ async function saveForestryConfig() {
 
 // ============ KONFIGURACJA FARMY ============
 
+/**
+ * Inicjalizuje selecty farmy - filtruje rośliny po poziomie gracza
+ */
 function initFarmSelects() {
   const farmSelects = ['farm1_crop', 'farm2_crop', 'farm3_crop', 'farm4_crop'];
+  
+  // Filtruj rośliny dostępne dla poziomu gracza i sortuj po poziomie
+  const availableCrops = FARM_CROPS
+    .filter(crop => crop.level <= playerLevel)
+    .sort((a, b) => a.level - b.level);
   
   farmSelects.forEach(selectId => {
     const select = document.getElementById(selectId);
     if (!select) return;
     
     select.innerHTML = '';
-    FARM_CROPS.forEach(crop => {
+    availableCrops.forEach(crop => {
       const option = document.createElement('option');
       option.value = crop.id;
       option.textContent = `${crop.name} (${crop.time})`;
       select.appendChild(option);
     });
   });
+}
+
+/**
+ * Aktualizuje selecty po zmianie poziomu gracza
+ */
+function updateFarmSelectsForLevel() {
+  // Zapamiętaj obecne wartości
+  const currentValues = {
+    farm1: document.getElementById('farm1_crop')?.value,
+    farm2: document.getElementById('farm2_crop')?.value,
+    farm3: document.getElementById('farm3_crop')?.value,
+    farm4: document.getElementById('farm4_crop')?.value,
+  };
+  
+  // Przebuduj selecty
+  initFarmSelects();
+  
+  // Przywróć wartości jeśli są nadal dostępne
+  if (currentValues.farm1) document.getElementById('farm1_crop').value = currentValues.farm1;
+  if (currentValues.farm2) document.getElementById('farm2_crop').value = currentValues.farm2;
+  if (currentValues.farm3) document.getElementById('farm3_crop').value = currentValues.farm3;
+  if (currentValues.farm4) document.getElementById('farm4_crop').value = currentValues.farm4;
 }
 
 async function loadFarmConfig() {
@@ -464,21 +774,18 @@ async function loadFarmConfig() {
       const farm3Select = document.getElementById('farm3_crop');
       const farm4Select = document.getElementById('farm4_crop');
       
+      // Użyj String() dla pewności że porównanie zadziała
       if (farm1Select && currentFarmConfig.farm1) {
-        farm1Select.value = currentFarmConfig.farm1;
-        console.log('Ustawiono farm1:', currentFarmConfig.farm1, '-> wartość:', farm1Select.value);
+        farm1Select.value = String(currentFarmConfig.farm1);
       }
       if (farm2Select && currentFarmConfig.farm2) {
-        farm2Select.value = currentFarmConfig.farm2;
-        console.log('Ustawiono farm2:', currentFarmConfig.farm2, '-> wartość:', farm2Select.value);
+        farm2Select.value = String(currentFarmConfig.farm2);
       }
       if (farm3Select && currentFarmConfig.farm3) {
-        farm3Select.value = currentFarmConfig.farm3;
-        console.log('Ustawiono farm3:', currentFarmConfig.farm3, '-> wartość:', farm3Select.value);
+        farm3Select.value = String(currentFarmConfig.farm3);
       }
       if (farm4Select && currentFarmConfig.farm4) {
-        farm4Select.value = currentFarmConfig.farm4;
-        console.log('Ustawiono farm4:', currentFarmConfig.farm4, '-> wartość:', farm4Select.value);
+        farm4Select.value = String(currentFarmConfig.farm4);
       }
     }
   } catch (error) {
@@ -494,27 +801,32 @@ async function saveFarmConfig() {
     return;
   }
   
-  const farm1El = document.getElementById('farm1_crop');
-  const farm2El = document.getElementById('farm2_crop');
-  const farm3El = document.getElementById('farm3_crop');
-  const farm4El = document.getElementById('farm4_crop');
+  const config = {};
   
-  console.log('Farm selects:', { farm1El, farm2El, farm3El, farm4El });
+  // Zapisz tylko konfigurację dla widocznych (odblokowanych) farm
+  for (let farmNum = 1; farmNum <= 4; farmNum++) {
+    const farmCard = document.getElementById(`farm${farmNum}_config`);
+    const farmSelect = document.getElementById(`farm${farmNum}_crop`);
+    
+    // Zapisz tylko jeśli karta farmy jest widoczna
+    if (farmCard && farmSelect && farmCard.style.display !== 'none') {
+      config[`farm${farmNum}`] = farmSelect.value || '1';
+    }
+  }
   
-  const config = {
-    farm1: farm1El?.value || 'zboze',
-    farm2: farm2El?.value || 'zboze',
-    farm3: farm3El?.value || 'zboze',
-    farm4: farm4El?.value || 'zboze',
-  };
+  console.log('Config to save (only visible farms):', config);
   
-  console.log('Config to save:', config);
+  // Jeśli nie ma żadnej widocznej farmy, zapisz przynajmniej farm1
+  if (Object.keys(config).length === 0) {
+    const farm1El = document.getElementById('farm1_crop');
+    config.farm1 = farm1El?.value || '1';
+  }
   
   try {
     const result = await api('POST', `/api/accounts/${selectedAccountId}/farm-config`, { config });
     console.log('Save result:', result);
-    showToast('Konfiguracja farmy zapisana!', 'success');
     currentFarmConfig = config;
+    showToast('Konfiguracja farmy zapisana!', 'success');
   } catch (error) {
     console.error('Save error:', error);
     showToast(error.message, 'error');
@@ -548,6 +860,32 @@ async function loadAccounts() {
     }
   } catch (error) {
     showToast('Błąd ładowania kont', 'error');
+  }
+}
+
+async function deleteAccount() {
+  if (!selectedAccountId) return;
+  
+  const confirmed = confirm('Czy na pewno chcesz usunąć to konto gry? Ta operacja jest nieodwracalna!');
+  if (!confirmed) return;
+  
+  try {
+    await api('DELETE', `/api/accounts/${selectedAccountId}`);
+    showToast('Konto zostało usunięte', 'success');
+    
+    // Wyczyść localStorage
+    localStorage.removeItem('selectedAccountId');
+    localStorage.removeItem(`gameStatus_${selectedAccountId}`);
+    
+    // Resetuj UI
+    selectedAccountId = null;
+    document.getElementById('accountDetails').classList.add('hidden');
+    document.getElementById('welcomeScreen').classList.remove('hidden');
+    
+    // Przeładuj listę kont
+    await loadAccounts();
+  } catch (error) {
+    showToast(error.message, 'error');
   }
 }
 
@@ -586,8 +924,8 @@ async function selectAccount(accountId) {
     // Załaduj status harmonogramu
     await refreshSchedulerStatus();
     
-    // Załaduj status gry (z cache lub świeży)
-    await refreshGameStatus();
+    // Załaduj status gry z cache bazy danych (nie wymuszaj odświeżenia)
+    await loadGameStatusFromCache();
     
   } catch (error) {
     showToast(error.message, 'error');
@@ -596,7 +934,106 @@ async function selectAccount(accountId) {
 
 // ============ STATUS GRY ============
 
-// Pobiera status z cache (localStorage) lub z serwera jeśli cache jest nieaktualny
+/**
+ * Ładuje status gry z cache bazy danych (bez uruchamiania przeglądarki)
+ */
+async function loadGameStatusFromCache() {
+  if (!selectedAccountId) return;
+  
+  try {
+    // Pobierz status z cache bazy danych
+    const data = await api('GET', `/api/accounts/${selectedAccountId}/game-status-cache`);
+    
+    if (data && data.fieldsStatus) {
+      // Przelicz timery
+      const fetchedAt = new Date(data.updatedAt).getTime();
+      const adjustedData = adjustTimersFromCache(data, fetchedAt);
+      displayGameStatus(adjustedData);
+      
+      const cacheAge = Math.round((Date.now() - fetchedAt) / 60000);
+      document.getElementById('statusFetchTime').textContent = 
+        `(z cache DB, ${cacheAge} min temu)`;
+      
+      // Uruchom live timery
+      startLiveTimers();
+      return; // Sukces - nie sprawdzaj localStorage
+    }
+  } catch (error) {
+    console.log('Brak cache statusu gry w DB:', error.message);
+  }
+  
+  // Fallback: sprawdź localStorage
+  try {
+    const cached = getStatusCache(selectedAccountId);
+    if (cached && cached.data) {
+      const adjustedData = adjustTimersFromCache(cached.data, cached.fetchedAt);
+      displayGameStatus(adjustedData);
+      const cacheAge = Math.round((Date.now() - cached.fetchedAt) / 60000);
+      document.getElementById('statusFetchTime').textContent = 
+        `(z localStorage, ${cacheAge} min temu)`;
+      startLiveTimers();
+    } else {
+      // Brak żadnego cache
+      document.getElementById('statusFetchTime').textContent = 
+        '(kliknij "Odśwież status" aby pobrać dane)';
+    }
+  } catch (e) {
+    console.error('Błąd ładowania cache z localStorage:', e);
+  }
+}
+
+// Pobiera status tylko z lokalnego cache (szybkie, bez wchodzenia do gry)
+function refreshGameStatusFromCache() {
+  if (!selectedAccountId) return;
+  
+  const cached = getStatusCache(selectedAccountId);
+  const now = Date.now();
+  
+  if (cached) {
+    const adjustedData = adjustTimersFromCache(cached.data, cached.fetchedAt);
+    displayGameStatus(adjustedData);
+    const cacheAge = Math.round((now - cached.fetchedAt) / 60000);
+    document.getElementById('statusFetchTime').textContent = 
+      `(z cache, ${cacheAge} min temu)`;
+    startLiveTimers();
+    showToast('Załadowano z cache', 'success');
+  } else {
+    showToast('Brak danych w cache - użyj "Odśwież z gry"', 'warning');
+  }
+}
+
+// Pobiera status na żywo z gry (wymaga uruchomienia przeglądarki)
+async function refreshGameStatusLive() {
+  if (!selectedAccountId) return;
+  
+  showModuleStatus('Loguję do gry i pobieram status...');
+  
+  try {
+    const data = await api('GET', `/api/accounts/${selectedAccountId}/game-status`);
+    
+    // Zapisz do cache w localStorage
+    setStatusCache(selectedAccountId, data);
+    
+    // Wyświetl dane
+    displayGameStatus(data);
+    
+    // Aktualizuj czas pobrania
+    document.getElementById('statusFetchTime').textContent = 
+      `(${new Date().toLocaleTimeString()})`;
+    
+    // Uruchom live timery
+    startLiveTimers();
+    
+    showModuleStatus('Status pobrany z gry!', 'success');
+    setTimeout(hideModuleStatus, 2000);
+    
+  } catch (error) {
+    showModuleStatus(`Błąd: ${error.message}`, 'error');
+    setTimeout(hideModuleStatus, 5000);
+  }
+}
+
+// Stara funkcja - zachowana dla kompatybilności, używa cache jeśli świeży
 async function refreshGameStatus(forceRefresh = false) {
   if (!selectedAccountId) return;
   
@@ -617,41 +1054,8 @@ async function refreshGameStatus(forceRefresh = false) {
     return;
   }
   
-  showModuleStatus('Pobieranie statusu z gry...');
-  
-  try {
-    const data = await api('GET', `/api/accounts/${selectedAccountId}/game-status`);
-    
-    // Zapisz do cache w localStorage
-    setStatusCache(selectedAccountId, data);
-    
-    // Wyświetl dane
-    displayGameStatus(data);
-    
-    // Aktualizuj czas pobrania
-    document.getElementById('statusFetchTime').textContent = 
-      `(${new Date().toLocaleTimeString()})`;
-    
-    // Uruchom live timery
-    startLiveTimers();
-    
-    showModuleStatus('Status pobrany!', 'success');
-    setTimeout(hideModuleStatus, 2000);
-    
-  } catch (error) {
-    // Przy błędzie spróbuj użyć cache nawet jeśli stary
-    const cached = getStatusCache(selectedAccountId);
-    if (cached) {
-      const adjustedData = adjustTimersFromCache(cached.data, cached.fetchedAt);
-      displayGameStatus(adjustedData);
-      const cacheAge = Math.round((now - cached.fetchedAt) / 60000);
-      document.getElementById('statusFetchTime').textContent = 
-        `(stary cache, ${cacheAge} min temu)`;
-      startLiveTimers();
-    }
-    showModuleStatus(`Błąd: ${error.message}`, 'error');
-    setTimeout(hideModuleStatus, 5000);
-  }
+  // Brak świeżego cache - pobierz z gry
+  await refreshGameStatusLive();
 }
 
 // Przelicza timery z cache na podstawie upływu czasu
@@ -788,9 +1192,160 @@ function stopLiveTimers() {
 
 // Wyświetla status gry (używane przez cache i fresh fetch)
 function displayGameStatus(data) {
+  // Aktualizuj widoczność sekcji na podstawie odblokowanych funkcji
+  if (data.unlockedFeatures) {
+    updateFeatureVisibility(data.unlockedFeatures);
+  }
+  
   displayStallsStatus(data.stallsStatus);
   displayFieldsStatus(data.fieldsStatus);
   displayForestryStatus(data.forestryStatus);
+  
+  // Aktualizuj widoczność farm na podstawie odblokowanych budynków
+  updateFarmCardsVisibility(data.fieldsStatus, data.unlockedFeatures);
+  
+  // Aktualizuj poziom gracza i przefiltruj rośliny
+  if (data.playerInfo && data.playerInfo.level) {
+    updatePlayerLevel(data.playerInfo.level);
+    displayPlayerInfo(data.playerInfo);
+  }
+}
+
+/**
+ * Aktualizuje widoczność sekcji konfiguracji na podstawie odblokowanych funkcji
+ * @param {Object} features - obiekt z informacjami o odblokowaniu { farms, stalls, forestry }
+ */
+function updateFeatureVisibility(features) {
+  // Ukryj sekcję straganów jeśli nie odblokowane
+  const stallsConfigPanel = document.getElementById('stallsConfigPanel');
+  const stallsStatusSection = document.getElementById('stallsStatusSection');
+  
+  if (stallsConfigPanel) {
+    stallsConfigPanel.style.display = features.stalls ? 'block' : 'none';
+  }
+  if (stallsStatusSection) {
+    stallsStatusSection.style.display = features.stalls ? 'block' : 'none';
+  }
+  
+  // Ukryj sekcję tartaku jeśli nie odblokowany
+  const forestryConfigPanel = document.getElementById('forestryConfigPanel');
+  const forestryStatusSection = document.getElementById('forestryStatusSection');
+  
+  if (forestryConfigPanel) {
+    forestryConfigPanel.style.display = features.forestry ? 'block' : 'none';
+  }
+  if (forestryStatusSection) {
+    forestryStatusSection.style.display = features.forestry ? 'block' : 'none';
+  }
+  
+  // Ukryj przyciski modułów dla niedostępnych funkcji
+  const forestryBtn = document.querySelector('.btn-forestry');
+  const stallsBtn = document.querySelector('.btn-stalls');
+  
+  if (forestryBtn) {
+    forestryBtn.style.display = features.forestry ? 'inline-block' : 'none';
+  }
+  if (stallsBtn) {
+    stallsBtn.style.display = features.stalls ? 'inline-block' : 'none';
+  }
+  
+  console.log(`Widoczność funkcji: Stragany=${features.stalls}, Tartak=${features.forestry}`);
+}
+
+// Aktualizuje poziom gracza i przeładowuje selektory
+function updatePlayerLevel(level) {
+  if (level && level > 0 && level !== playerLevel) {
+    console.log(`Aktualizacja poziomu gracza: ${playerLevel} -> ${level}`);
+    playerLevel = level;
+    // Przeładuj selektory roślin z nowym poziomem
+    initFarmSelects();
+  }
+}
+
+// Wyświetla informacje o graczu
+function displayPlayerInfo(info) {
+  // Sprawdź czy istnieje element do wyświetlenia poziomu
+  let playerInfoEl = document.getElementById('playerInfoDisplay');
+  if (!playerInfoEl) {
+    // Stwórz element jeśli nie istnieje (można wstawić w odpowiednie miejsce)
+    const statusSection = document.querySelector('.status-section h4');
+    if (statusSection) {
+      playerInfoEl = document.createElement('div');
+      playerInfoEl.id = 'playerInfoDisplay';
+      playerInfoEl.className = 'player-info-badge';
+      statusSection.parentNode.insertBefore(playerInfoEl, statusSection.nextSibling);
+    }
+  }
+  
+  if (playerInfoEl && info) {
+    // money jest w formacie liczby np. 464365.28, sformatuj do wyświetlenia
+    const money = info.money || info.cash || 0;
+    const formattedMoney = money.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ft';
+    
+    playerInfoEl.innerHTML = `
+      <span class="badge bg-primary">Poziom: ${info.level || 1}</span>
+      <span class="badge bg-success">💰 ${formattedMoney}</span>
+      ${info.isPremium ? '<span class="badge bg-warning text-dark">⭐ Premium</span>' : ''}
+    `;
+  }
+}
+
+/**
+ * Aktualizuje widoczność kart farm na podstawie statusu pól i odblokowanych funkcji
+ * Ukrywa farmy które są całkowicie zablokowane lub nieodblokowane na mapie
+ * @param {Array} fieldsStatus - status pól
+ * @param {Object} unlockedFeatures - informacje o odblokowanych funkcjach
+ */
+function updateFarmCardsVisibility(fieldsStatus, unlockedFeatures = null) {
+  // Domyślnie ukryj wszystkie farmy oprócz 1
+  for (let farmNum = 1; farmNum <= 4; farmNum++) {
+    const farmCard = document.getElementById(`farm${farmNum}_config`);
+    if (farmCard) {
+      // Farma 1 zawsze widoczna, pozostałe domyślnie ukryte
+      farmCard.style.display = farmNum === 1 ? 'block' : 'none';
+    }
+  }
+  
+  // Jeśli mamy informacje o odblokowanych funkcjach z mapy, użyj ich
+  if (unlockedFeatures && unlockedFeatures.farms) {
+    for (let farmNum = 1; farmNum <= 4; farmNum++) {
+      const farmCard = document.getElementById(`farm${farmNum}_config`);
+      if (farmCard) {
+        if (unlockedFeatures.farms[farmNum]) {
+          farmCard.style.display = 'block';
+        } else {
+          farmCard.style.display = 'none';
+          console.log(`Ukryto farmę ${farmNum} - zablokowana na mapie`);
+        }
+      }
+    }
+    return; // Użyj tylko informacji z mapy
+  }
+  
+  // Fallback: Jeśli mamy dane o polach, sprawdź które farmy mają aktywne budynki
+  if (fieldsStatus && fieldsStatus.length > 0) {
+    // Grupuj pola wg farmy
+    const farmHasUnlockedBuilding = { 1: false, 2: false, 3: false, 4: false };
+    
+    fieldsStatus.forEach(field => {
+      if (field.farm && field.status !== 'locked') {
+        farmHasUnlockedBuilding[field.farm] = true;
+      }
+    });
+    
+    // Ukryj karty farm bez odblokowanych budynków
+    for (let farmNum = 1; farmNum <= 4; farmNum++) {
+      const farmCard = document.getElementById(`farm${farmNum}_config`);
+      if (farmCard) {
+        if (farmHasUnlockedBuilding[farmNum]) {
+          farmCard.style.display = 'block';
+        } else {
+          farmCard.style.display = 'none';
+          console.log(`Ukryto farmę ${farmNum} - wszystkie budynki zablokowane`);
+        }
+      }
+    }
+  }
 }
 
 // Uruchamia automatyczne odświeżanie statusu co 30 min
@@ -861,8 +1416,16 @@ function displayFieldsStatus(fields) {
     return;
   }
   
+  // Filtruj - ukryj zablokowane i puste pola
+  const activeFields = fields.filter(f => f.status !== 'locked' && f.status !== 'empty');
+  
+  if (activeFields.length === 0) {
+    container.innerHTML = '<p class="no-data">Brak aktywnych upraw (wszystkie pola puste lub zablokowane)</p>';
+    return;
+  }
+  
   // Sortuj - gotowe na górze, potem po czasie
-  const sortedFields = [...fields].sort((a, b) => {
+  const sortedFields = [...activeFields].sort((a, b) => {
     if (a.status === 'ready' && b.status !== 'ready') return -1;
     if (a.status !== 'ready' && b.status === 'ready') return 1;
     return 0;
@@ -871,12 +1434,13 @@ function displayFieldsStatus(fields) {
   container.innerHTML = sortedFields.map(field => {
     const isReady = field.status === 'ready';
     const statusClass = isReady ? 'ready' : 'growing';
+    const timeDisplay = isReady ? '✓ Gotowe' : (field.timeLeft || '?');
     
     return `
       <div class="field-status-item ${statusClass}">
-        <span class="field-location">🌾 Farma ${field.farm} / Pole ${field.field}</span>
-        <span class="field-plant">${field.plantType || 'Nieznana'}</span>
-        <span class="field-time ${isReady ? 'ready' : ''}">${field.timeLeft || '?'}</span>
+        <span class="field-location">F${field.farm}/P${field.field}</span>
+        <span class="field-plant">${field.plantType || '?'}</span>
+        <span class="field-time ${isReady ? 'ready' : ''}">${timeDisplay}</span>
       </div>
     `;
   }).join('');
@@ -1125,6 +1689,7 @@ async function startScheduler() {
   const forestryInterval = parseInt(document.getElementById('forestryInterval').value) || 0;
   const stallsInterval = parseInt(document.getElementById('stallsInterval').value) || 0;
   const smartMode = document.getElementById('smartModeEnabled').checked;
+  const cacheInterval = parseInt(document.getElementById('cacheInterval').value) || 60;
   
   if (farmInterval === 0 && forestryInterval === 0 && stallsInterval === 0 && !smartMode) {
     showToast('Ustaw interwał dla co najmniej jednego modułu lub włącz tryb inteligentny', 'error');
@@ -1136,7 +1701,8 @@ async function startScheduler() {
       farmInterval,
       forestryInterval,
       stallsInterval,
-      smartMode
+      smartMode,
+      cacheInterval
     });
     showToast('Harmonogram uruchomiony!', 'success');
     await refreshSchedulerStatus();
@@ -1183,6 +1749,7 @@ async function refreshSchedulerStatus() {
     // Aktualizuj wskaźnik statusu
     const statusEl = document.getElementById('schedulerActiveStatus');
     const smartModeCheckbox = document.getElementById('smartModeEnabled');
+    const cacheIntervalInput = document.getElementById('cacheInterval');
     
     if (accountStatus) {
       statusEl.innerHTML = '<span class="status-indicator active"></span><span>Aktywny</span>';
@@ -1197,6 +1764,11 @@ async function refreshSchedulerStatus() {
       // Smart mode z aktywnego schedulera
       if (smartModeCheckbox) {
         smartModeCheckbox.checked = accountStatus.smartMode || false;
+      }
+      
+      // Cache interval z aktywnego schedulera
+      if (cacheIntervalInput && accountStatus.cacheInterval) {
+        cacheIntervalInput.value = accountStatus.cacheInterval;
       }
       
       // Ostatnie uruchomienia
@@ -1221,6 +1793,11 @@ async function refreshSchedulerStatus() {
         smartModeCheckbox.checked = config.scheduler_smart_mode === 1;
       }
       
+      // Cache interval z bazy
+      if (cacheIntervalInput) {
+        cacheIntervalInput.value = config.scheduler_cache_interval || 60;
+      }
+      
       // Wyczyść ostatnie uruchomienia
       document.getElementById('farmLastRun').textContent = '-';
       document.getElementById('forestryLastRun').textContent = '-';
@@ -1240,6 +1817,22 @@ async function refreshSchedulerStatus() {
         statusData.currentTask.moduleType === 'stalls' ? '🏪 Stragany' : statusData.currentTask.moduleType;
     } else {
       currentTaskEl.classList.add('hidden');
+    }
+    
+    // Aktualizuj statystyki wykonań
+    if (accountStatus?.stats) {
+      const stats = accountStatus.stats;
+      document.getElementById('statFarm').textContent = 
+        `✓${stats.farm?.success || 0} / ✗${stats.farm?.error || 0}`;
+      document.getElementById('statForestry').textContent = 
+        `✓${stats.forestry?.success || 0} / ✗${stats.forestry?.error || 0}`;
+      document.getElementById('statStalls').textContent = 
+        `✓${stats.stalls?.success || 0} / ✗${stats.stalls?.error || 0}`;
+    } else {
+      // Wyczyść statystyki gdy nieaktywny
+      document.getElementById('statFarm').textContent = '✓0 / ✗0';
+      document.getElementById('statForestry').textContent = '✓0 / ✗0';
+      document.getElementById('statStalls').textContent = '✓0 / ✗0';
     }
     
   } catch (error) {
@@ -1341,11 +1934,17 @@ async function loadSchedulerStatus() {
   try {
     const status = await api('GET', '/api/scheduler/status');
     const container = document.getElementById('schedulerStatus');
+    const activeCount = status.activeAccounts?.length || 0;
     
-    if (status.isRunning) {
+    if (status.isRunning && activeCount > 0) {
       container.innerHTML = `
         <span class="status-indicator running"></span>
-        <span class="status-text">Aktywny (${status.accounts.length} kont)</span>
+        <span class="status-text">Aktywny (${activeCount} kont)</span>
+      `;
+    } else if (status.isRunning) {
+      container.innerHTML = `
+        <span class="status-indicator running"></span>
+        <span class="status-text">Gotowy</span>
       `;
     } else {
       container.innerHTML = `
@@ -1355,6 +1954,11 @@ async function loadSchedulerStatus() {
     }
   } catch (error) {
     console.error('Błąd pobierania statusu schedulera:', error);
+    const container = document.getElementById('schedulerStatus');
+    container.innerHTML = `
+      <span class="status-indicator stopped"></span>
+      <span class="status-text">Błąd połączenia</span>
+    `;
   }
 }
 
