@@ -697,12 +697,14 @@ app.get('/api/accounts/:id/game-status-cache', requireAuth, (req, res) => {
       return res.status(404).json({ error: 'Brak cache' });
     }
     
+    // Zwróć unlockedFeatures tylko jeśli był zapisany w cache (nie domyślna wartość)
+    // null oznacza "brak danych" - dashboard powinien pokazać wszystkie sekcje
     res.json({
       fieldsStatus: cache.fieldsStatus,
       stallsStatus: cache.stallsStatus,
       forestryStatus: cache.forestryStatus,
       playerInfo: cache.playerInfo || { level: 1, gold: 0, cash: 0, name: '' },
-      unlockedFeatures: cache.unlockedFeatures || { farms: { 1: true, 2: false, 3: false, 4: false }, stalls: false, forestry: false },
+      unlockedFeatures: cache.unlockedFeatures, // może być null
       updatedAt: cache.updatedAt
     });
   } catch (error) {

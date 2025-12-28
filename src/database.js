@@ -219,6 +219,14 @@ export function initDatabase() {
   } catch (e) {
     // Kolumna już istnieje
   }
+  
+  // Migracja - dodanie kolumny unlocked_features
+  try {
+    db.exec(`ALTER TABLE game_status_cache ADD COLUMN unlocked_features TEXT`);
+    logger.info('Dodano kolumnę unlocked_features do game_status_cache');
+  } catch (e) {
+    // Kolumna już istnieje
+  }
 
   // Tabela ustawień globalnych aplikacji
   db.exec(`
@@ -662,13 +670,14 @@ export function getActiveSchedulerConfigs() {
 
 export function saveGameStatusCache(accountId, status) {
   const stmt = db.prepare(`
-    INSERT INTO game_status_cache (account_id, fields_status, stalls_status, forestry_status, player_info, updated_at)
-    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO game_status_cache (account_id, fields_status, stalls_status, forestry_status, player_info, unlocked_features, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(account_id) DO UPDATE SET
       fields_status = excluded.fields_status,
       stalls_status = excluded.stalls_status,
       forestry_status = excluded.forestry_status,
       player_info = excluded.player_info,
+      unlocked_features = excluded.unlocked_features,
       updated_at = CURRENT_TIMESTAMP
   `);
   return stmt.run(
@@ -676,13 +685,14 @@ export function saveGameStatusCache(accountId, status) {
     JSON.stringify(status.fieldsStatus || null),
     JSON.stringify(status.stallsStatus || null),
     JSON.stringify(status.forestryStatus || null),
-    JSON.stringify(status.playerInfo || null)
+    JSON.stringify(status.playerInfo || null),
+    JSON.stringify(status.unlockedFeatures || null)
   );
 }
 
 export function getGameStatusCache(accountId) {
   const stmt = db.prepare(`
-    SELECT fields_status, stalls_status, forestry_status, player_info, updated_at
+    SELECT fields_status, stalls_status, forestry_status, player_info, unlocked_features, updated_at
     FROM game_status_cache WHERE account_id = ?
   `);
   const result = stmt.get(accountId);
@@ -693,6 +703,7 @@ export function getGameStatusCache(accountId) {
     stallsStatus: result.stalls_status ? JSON.parse(result.stalls_status) : null,
     forestryStatus: result.forestry_status ? JSON.parse(result.forestry_status) : null,
     playerInfo: result.player_info ? JSON.parse(result.player_info) : { level: 1, gold: 0, cash: 0, name: '' },
+    unlockedFeatures: result.unlocked_features ? JSON.parse(result.unlocked_features) : null,
     updatedAt: result.updated_at
   };
 }

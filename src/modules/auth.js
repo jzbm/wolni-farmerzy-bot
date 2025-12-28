@@ -340,13 +340,17 @@ export class GameAuth {
         try {
           const blockEl = await page.$(`#map_farm${farmNum}_block`);
           if (blockEl) {
-            const style = await blockEl.getAttribute('style') || '';
-            const isBlocked = style.includes('display: block') || style.includes('display:block');
+            // Użyj computed style - jeśli blokada jest widoczna, farma zablokowana
+            const isBlocked = await page.evaluate(el => {
+              const computed = window.getComputedStyle(el);
+              return computed.display !== 'none';
+            }, blockEl);
             features.farms[farmNum] = !isBlocked;
             this.log.debug(`Farma ${farmNum}: ${isBlocked ? 'ZABLOKOWANA' : 'dostępna'}`);
           } else {
             // Brak elementu blokady - farma dostępna
             features.farms[farmNum] = true;
+            this.log.debug(`Farma ${farmNum}: dostępna (brak elementu blokady)`);
           }
         } catch (e) {
           this.log.debug(`Błąd sprawdzania farmy ${farmNum}: ${e.message}`);
@@ -357,34 +361,42 @@ export class GameAuth {
       try {
         const stallEl = await page.$('#map_stall');
         if (stallEl) {
-          const style = await stallEl.getAttribute('style') || '';
-          const isHidden = style.includes('display: none') || style.includes('display:none');
+          // Użyj computed style zamiast inline style
+          const isHidden = await page.evaluate(el => {
+            const computed = window.getComputedStyle(el);
+            return computed.display === 'none' || computed.visibility === 'hidden';
+          }, stallEl);
           features.stalls = !isHidden;
-          this.log.debug(`Stragany: ${isHidden ? 'NIEDOSTĘPNE' : 'dostępne'}`);
+          this.log.debug(`Stragany: ${isHidden ? 'NIEDOSTĘPNE (display: none)' : 'dostępne'}`);
         } else {
-          // Sprawdź alternatywnie przez #map_stall_overview_link1
-          const stallLink = await page.$('#map_stall_overview_link1');
-          features.stalls = stallLink !== null;
+          // Brak elementu - niedostępne
+          features.stalls = false;
+          this.log.debug('Stragany: NIEDOSTĘPNE (brak elementu #map_stall)');
         }
       } catch (e) {
         this.log.debug(`Błąd sprawdzania straganów: ${e.message}`);
+        features.stalls = false;
       }
       
       // Sprawdź tartak - #map_forestry_block z display: block = zablokowany
       try {
         const forestryBlock = await page.$('#map_forestry_block');
         if (forestryBlock) {
-          const style = await forestryBlock.getAttribute('style') || '';
-          const isBlocked = style.includes('display: block') || style.includes('display:block');
+          // Użyj computed style - jeśli blokada jest widoczna, tartak zablokowany
+          const isBlocked = await page.evaluate(el => {
+            const computed = window.getComputedStyle(el);
+            return computed.display !== 'none';
+          }, forestryBlock);
           features.forestry = !isBlocked;
-          this.log.debug(`Tartak: ${isBlocked ? 'ZABLOKOWANY' : 'dostępny'}`);
+          this.log.debug(`Tartak: ${isBlocked ? 'ZABLOKOWANY (blokada widoczna)' : 'dostępny'}`);
         } else {
-          // Sprawdź alternatywnie przez speedlink
-          const forestryLink = await page.$('#speedlink_forestry');
-          features.forestry = forestryLink !== null;
+          // Brak elementu blokady - tartak dostępny
+          features.forestry = true;
+          this.log.debug('Tartak: dostępny (brak elementu blokady)');
         }
       } catch (e) {
         this.log.debug(`Błąd sprawdzania tartaku: ${e.message}`);
+        features.forestry = false;
       }
       
       this.log.info(`Odblokowane: Farmy=${Object.entries(features.farms).filter(([k,v])=>v).map(([k])=>k).join(',')}, Stragany=${features.stalls}, Tartak=${features.forestry}`);

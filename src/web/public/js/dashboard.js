@@ -1193,8 +1193,12 @@ function stopLiveTimers() {
 // Wyświetla status gry (używane przez cache i fresh fetch)
 function displayGameStatus(data) {
   // Aktualizuj widoczność sekcji na podstawie odblokowanych funkcji
-  if (data.unlockedFeatures) {
+  // Tylko jeśli mamy rzeczywiste dane o odblokowaniu (nie null)
+  if (data.unlockedFeatures && typeof data.unlockedFeatures === 'object') {
     updateFeatureVisibility(data.unlockedFeatures);
+  } else {
+    // Brak danych o odblokowaniu - pokaż wszystkie sekcje
+    showAllFeatureSections();
   }
   
   displayStallsStatus(data.stallsStatus);
@@ -1209,6 +1213,29 @@ function displayGameStatus(data) {
     updatePlayerLevel(data.playerInfo.level);
     displayPlayerInfo(data.playerInfo);
   }
+}
+
+/**
+ * Pokazuje wszystkie sekcje funkcji (gdy brak danych o odblokowaniu)
+ * Używane gdy cache nie ma zapisanych informacji o odblokowaniu
+ */
+function showAllFeatureSections() {
+  const stallsConfigPanel = document.getElementById('stallsConfigPanel');
+  const stallsStatusSection = document.getElementById('stallsStatusSection');
+  const forestryConfigPanel = document.getElementById('forestryConfigPanel');
+  const forestryStatusSection = document.getElementById('forestryStatusSection');
+  const forestryBtn = document.querySelector('.btn-forestry');
+  const stallsBtn = document.querySelector('.btn-stalls');
+  
+  // Pokaż wszystko - użytkownik musi odświeżyć status aby sprawdzić odblokownie
+  if (stallsConfigPanel) stallsConfigPanel.style.display = 'block';
+  if (stallsStatusSection) stallsStatusSection.style.display = 'block';
+  if (forestryConfigPanel) forestryConfigPanel.style.display = 'block';
+  if (forestryStatusSection) forestryStatusSection.style.display = 'block';
+  if (forestryBtn) forestryBtn.style.display = 'inline-block';
+  if (stallsBtn) stallsBtn.style.display = 'inline-block';
+  
+  console.log('Brak danych o odblokowaniu - pokazuję wszystkie sekcje');
 }
 
 /**
