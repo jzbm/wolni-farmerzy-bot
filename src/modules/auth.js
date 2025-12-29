@@ -335,18 +335,27 @@ export class GameAuth {
       }
       
       // Sprawdź farmy 2-4 (farm 1 zawsze odblokowana)
-      // Zablokowane farmy mają: #map_farm{X}_block z display: block
+      // Zablokowane farmy mają: #map_farm{X}_block z display: block (inline style)
       for (let farmNum = 2; farmNum <= 4; farmNum++) {
         try {
           const blockEl = await page.$(`#map_farm${farmNum}_block`);
           if (blockEl) {
-            // Użyj computed style - jeśli blokada jest widoczna, farma zablokowana
-            const isBlocked = await page.evaluate(el => {
-              const computed = window.getComputedStyle(el);
-              return computed.display !== 'none';
-            }, blockEl);
-            features.farms[farmNum] = !isBlocked;
-            this.log.debug(`Farma ${farmNum}: ${isBlocked ? 'ZABLOKOWANA' : 'dostępna'}`);
+            // Sprawdź inline style - display: block oznacza że blokada jest widoczna
+            const inlineStyle = await blockEl.getAttribute('style') || '';
+            const isBlocked = inlineStyle.includes('display: block') || inlineStyle.includes('display:block');
+            
+            // Dodatkowo sprawdź computed style jako backup
+            if (!isBlocked) {
+              const computedBlocked = await page.evaluate(el => {
+                const computed = window.getComputedStyle(el);
+                return computed.display !== 'none';
+              }, blockEl);
+              features.farms[farmNum] = !computedBlocked;
+              this.log.debug(`Farma ${farmNum}: ${computedBlocked ? 'ZABLOKOWANA (computed)' : 'dostępna'}`);
+            } else {
+              features.farms[farmNum] = false; // Blokada widoczna = farma niedostępna
+              this.log.debug(`Farma ${farmNum}: ZABLOKOWANA (inline style: ${inlineStyle})`);
+            }
           } else {
             // Brak elementu blokady - farma dostępna
             features.farms[farmNum] = true;
@@ -354,25 +363,18 @@ export class GameAuth {
           }
         } catch (e) {
           this.log.debug(`Błąd sprawdzania farmy ${farmNum}: ${e.message}`);
+          features.farms[farmNum] = false; // W razie błędu zakładamy niedostępną
         }
       }
       
-      // Sprawdź stragany - #map_stall z display: none = niedostępne
+// Sprawdź stragany - jeśli istnieją przyciski #map_stall_overview_link1/2, stragany są dostępne
       try {
-        const stallEl = await page.$('#map_stall');
-        if (stallEl) {
-          // Użyj computed style zamiast inline style
-          const isHidden = await page.evaluate(el => {
-            const computed = window.getComputedStyle(el);
-            return computed.display === 'none' || computed.visibility === 'hidden';
-          }, stallEl);
-          features.stalls = !isHidden;
-          this.log.debug(`Stragany: ${isHidden ? 'NIEDOSTĘPNE (display: none)' : 'dostępne'}`);
-        } else {
-          // Brak elementu - niedostępne
-          features.stalls = false;
-          this.log.debug('Stragany: NIEDOSTĘPNE (brak elementu #map_stall)');
-        }
+        const stallLink1 = await page.$('#map_stall_overview_link1');
+        const stallLink2 = await page.$('#map_stall_overview_link2');
+        
+        // Stragany są dostępne jeśli istnieje przynajmniej jeden przycisk straganu
+        features.stalls = stallLink1 !== null || stallLink2 !== null;
+        this.log.debug(`Stragany: ${features.stalls ? 'dostępne (znaleziono przyciski straganów)' : 'NIEDOSTĘPNE (brak przycisków straganów)'}`);
       } catch (e) {
         this.log.debug(`Błąd sprawdzania straganów: ${e.message}`);
         features.stalls = false;
@@ -390,9 +392,20 @@ export class GameAuth {
           features.forestry = !isBlocked;
           this.log.debug(`Tartak: ${isBlocked ? 'ZABLOKOWANY (blokada widoczna)' : 'dostępny'}`);
         } else {
-          // Brak elementu blokady - tartak dostępny
-          features.forestry = true;
-          this.log.debug('Tartak: dostępny (brak elementu blokady)');
+          // Brak elementu blokady - sprawdź czy element tartaku istnieje i jest widoczny
+          const forestryEl = await page.$('#map_forestry');
+          if (forestryEl) {
+            const isHidden = await page.evaluate(el => {
+              const computed = window.getComputedStyle(el);
+              return computed.display === 'none' || computed.visibility === 'hidden';
+            }, forestryEl);
+            features.forestry = !isHidden;
+            this.log.debug(`Tartak: ${isHidden ? 'NIEDOSTĘPNY (ukryty element)' : 'dostępny (brak blokady)'}`);
+          } else {
+            // Ani blokada, ani element tartaku - zakładamy niedostępny
+            features.forestry = false;
+            this.log.debug('Tartak: NIEDOSTĘPNY (brak elementów tartaku)');
+          }
         }
       } catch (e) {
         this.log.debug(`Błąd sprawdzania tartaku: ${e.message}`);

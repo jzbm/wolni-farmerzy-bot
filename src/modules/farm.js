@@ -1653,7 +1653,7 @@ export class FarmModule {
    * Próbuje usunąć przeszkodę z pola (chwasty, kamienie, etc.)
    * Sprawdza koszt i porównuje z dostępnymi pieniędzmi
    */
-  async tryToClearObstacle(fieldIndex) {
+  async tryToClearObstacle(obstacleData) {
     const page = this.session.page;
     
     try {
@@ -1662,9 +1662,13 @@ export class FarmModule {
       await this.session.closePopups();
       await this.session.randomDelay(200, 400);
       
-      // Kliknij na pole z przeszkodą
-      const field = await page.$(`#f${fieldIndex}`);
-      if (!field) return false;
+      // Kliknij na pole z przeszkodą - użyj innerId z danych przeszkody
+      const fieldSelector = `#${obstacleData.innerId}`;
+      const field = await page.$(fieldSelector);
+      if (!field) {
+        this.log.debug(`Nie znaleziono pola ${fieldSelector}`);
+        return false;
+      }
       
       await field.click();
       await this.session.randomDelay(800, 1200);
@@ -1878,16 +1882,16 @@ export class FarmModule {
           break;
         }
         
-        this.log.debug(`Usuwam ${obstacle.type} z pola ${obstacle.index}...`);
-        const cleared = await this.tryToClearObstacle(obstacle.index);
+        this.log.debug(`Usuwam ${obstacle.type} z pola ${obstacle.innerId}...`);
+        const cleared = await this.tryToClearObstacle(obstacle);
         
         if (cleared) {
           clearedCount++;
           failedAttempts = 0; // Reset licznika błędów
-          this.log.info(`Usunięto ${obstacle.type} z pola ${obstacle.index}`);
+          this.log.info(`Usunięto ${obstacle.type} z pola ${obstacle.innerId}`);
         } else {
           failedAttempts++;
-          this.log.debug(`Nie udało się usunąć ${obstacle.type} z pola ${obstacle.index} (próba ${failedAttempts}/${maxFailedAttempts})`);
+          this.log.debug(`Nie udało się usunąć ${obstacle.type} z pola ${obstacle.innerId} (próba ${failedAttempts}/${maxFailedAttempts})`);
           
           // Może brakuje pieniędzy - sprawdź czy są jeszcze inne przeszkody
           if (failedAttempts >= maxFailedAttempts) {

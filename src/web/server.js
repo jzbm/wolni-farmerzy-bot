@@ -358,6 +358,23 @@ app.post('/api/accounts/:id/run-forestry', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Konto nie znalezione' });
     }
     
+    // Uruchom przeglądarkę i zaloguj
+    const session = await browserManager.getSession(account.email);
+    const auth = new GameAuth(session, account);
+    const loggedIn = await auth.ensureLoggedIn();
+    
+    if (!loggedIn) {
+      await browserManager.closeSession(account.email);
+      return res.status(500).json({ error: 'Nie udało się zalogować' });
+    }
+    
+    // Sprawdź czy tartak jest odblokowany
+    const unlockedFeatures = await auth.getUnlockedFeatures();
+    if (!unlockedFeatures.forestry) {
+      await browserManager.closeSession(account.email);
+      return res.status(400).json({ error: 'Tartak nie jest odblokowany dla tego konta' });
+    }
+    
     // Pobierz konfigurację tartaku
     const buildingConfigStr = getForestryBuildingConfig(id);
     const buildingConfig = buildingConfigStr ? JSON.parse(buildingConfigStr) : null;
@@ -376,16 +393,6 @@ app.post('/api/accounts/:id/run-forestry', requireAuth, async (req, res) => {
     };
     const preferredTreeName = account.forestry_preferred_tree || 'swierk';
     const preferredTreeId = treeNameToId[preferredTreeName.toLowerCase()] || 1;
-    
-    // Uruchom cykl tartaku
-    const session = await browserManager.getSession(account.email);
-    const auth = new GameAuth(session, account);
-    const loggedIn = await auth.ensureLoggedIn();
-    
-    if (!loggedIn) {
-      await browserManager.closeSession(account.email);
-      return res.status(500).json({ error: 'Nie udało się zalogować' });
-    }
     
     const forestry = new ForestryModule(session, account);
     const results = await forestry.fullForestryCycle({
@@ -428,6 +435,13 @@ app.post('/api/accounts/:id/run-stalls', requireAuth, async (req, res) => {
     if (!loggedIn) {
       await browserManager.closeSession(account.email);
       return res.status(500).json({ error: 'Nie udało się zalogować' });
+    }
+    
+    // Sprawdź czy stragany są odblokowane
+    const unlockedFeatures = await auth.getUnlockedFeatures();
+    if (!unlockedFeatures.stalls) {
+      await browserManager.closeSession(account.email);
+      return res.status(400).json({ error: 'Stragany nie są odblokowane dla tego konta' });
     }
     
     const { StallsModule } = await import('../modules/stalls.js');
@@ -657,9 +671,13 @@ app.get('/api/accounts/:id/game-status', requireAuth, async (req, res) => {
     // Zamknij przeglądarkę
     await browserManager.closeSession(account.email);
     
+    // Loguj wykryte odblokowane funkcje
+    console.log(`[${account.email}] Wykryte odblokowane funkcje:`, JSON.stringify(unlockedFeatures));
+    
     // Zapisz do cache w bazie danych (dla smart mode)
     try {
       saveGameStatusCache(parseInt(id), { fieldsStatus, stallsStatus, forestryStatus, playerInfo, unlockedFeatures });
+      console.log(`[${account.email}] Cache zapisany z unlockedFeatures:`, JSON.stringify(unlockedFeatures));
     } catch (e) {
       console.error('Błąd zapisu cache statusu:', e);
     }
