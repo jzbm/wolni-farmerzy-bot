@@ -1,22 +1,22 @@
-# 🌾 Wolni Farmerzy Bot
+# Wolni Farmerzy Bot
 
 Automatyczny bot do gry przeglądarkowej Wolni Farmerzy (wolnifarmerzy.pl).
 
-## 📋 Funkcje
+##  Funkcje
 
-- ✅ Automatyczne logowanie
-- ✅ Zbieranie plonów z pól uprawnych
-- ✅ Sadzenie roślin
-- ✅ Podlewanie
-- ✅ Obsługa tartaku (drzewa)
-- ✅ Uzupełnianie straganów (mapa)
-- ✅ Obsługa wielu kont
-- ✅ Panel webowy do zarządzania
-- ✅ Harmonogram oparty na czasach wzrostu
-- ✅ Statystyki i logi akcji
-- ✅ Automatyczne zamykanie popupów (cookies, reklamy, promocje)
+-  Automatyczne logowanie
+-  Zbieranie plonów z pól uprawnych
+-  Sadzenie roślin
+-  Podlewanie
+-  Obsługa tartaku (drzewa)
+-  Uzupełnianie straganów (mapa)
+-  Obsługa wielu kont
+-  Panel webowy do zarządzania
+-  Harmonogram oparty na czasach wzrostu
+-  Statystyki i logi akcji
+-  Automatyczne zamykanie popupów (cookies, reklamy, promocje)
 
-## 🚀 Instalacja
+## Instalacja
 
 ### Wymagania
 - Node.js 18+ 
@@ -41,7 +41,7 @@ copy .env.example .env
 ```
 Edytuj plik `.env` według potrzeb.
 
-## 🎮 Użycie
+##  Użycie
 
 ### Uruchomienie panelu webowego
 ```bash
@@ -55,7 +55,7 @@ npm run analyze
 ```
 To narzędzie pomoże zidentyfikować selektory CSS w grze.
 
-## 📱 Panel webowy
+##  Panel webowy
 
 1. **Rejestracja/Logowanie** - Utwórz konto do panelu
 2. **Dodaj konto gry** - Podaj dane logowania do Wolnych Farmerów
@@ -78,7 +78,7 @@ Wybierz które rośliny mają być automatycznie sadzone po zbiorze.
 ### Interwał sprawdzania
 Co ile minut bot ma sprawdzać stan gry (domyślnie 5 min).
 
-## 🖥️ Wdrożenie na VPS
+##  Wdrożenie na VPS
 
 ### 1. Przygotowanie serwera
 ```bash
@@ -124,7 +124,7 @@ server {
 }
 ```
 
-## 📁 Struktura projektu
+##  Struktura projektu
 
 ```
 wf/
@@ -153,7 +153,7 @@ wf/
 └── README.md
 ```
 
-## ⚙️ Konfiguracja czasów roślin
+##  Konfiguracja czasów roślin
 
 Czasy wzrostu roślin są zdefiniowane w `src/config.js`. 
 Po uruchomieniu analizatora gry możesz zaktualizować te wartości.
@@ -166,17 +166,6 @@ plantGrowthTimes: {
 }
 ```
 
-## 🔧 Rozwiązywanie problemów
-
-### Bot nie może się zalogować
-1. Sprawdź dane logowania
-2. Uruchom `npm run analyze` aby zbadać strukturę strony
-3. Sprawdź screenshots w folderze `screenshots/`
-
-### Popupy blokują akcje
-Bot automatycznie zamyka znane popupy. Jeśli pojawi się nowy:
-1. Zrób screenshot problemu
-2. Dodaj selektor do `closePopups()` w `src/browser.js`
 
 ### Błędy selektorów
 Gra może zmienić strukturę HTML. Użyj analizatora:
@@ -185,22 +174,17 @@ npm run analyze
 ```
 I zaktualizuj selektory w `src/config.js`.
 
-## ⚠️ Ważne uwagi
 
-1. **Używaj na własne ryzyko** - Automatyzacja może naruszać regulamin gry
-2. **Nie nadużywaj** - Zbyt częste akcje mogą prowadzić do bana
-3. **Testuj lokalnie** - Przed wdrożeniem na VPS przetestuj lokalnie
-4. **Monitoruj logi** - Sprawdzaj regularnie folder `logs/`
+## TODO / Przyszłe funkcje
 
-## 📝 TODO / Przyszłe funkcje
+- Powiadomienia Discord/Email
+- Automatyczna sprzedaż produktów
+- Obsługa zwierząt
+- Rozpoznawanie captcha
+- API REST dla integracji zewnętrznych
 
-- [ ] Powiadomienia Discord/Email
-- [ ] Automatyczna sprzedaż produktów
-- [ ] Obsługa zwierząt
-- [ ] Rozpoznawanie captcha
-- [ ] API REST dla integracji zewnętrznych
+## Licencja
 
-## 📄 Licencja
+MIT License -
 
-MIT License - używaj dowolnie, ale na własną odpowiedzialność.
 # wolni-farmerzy-bot
