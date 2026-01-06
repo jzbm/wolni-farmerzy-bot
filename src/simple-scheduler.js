@@ -27,14 +27,16 @@ import logger from './logger.js';
 let emitModuleStarted = null;
 let emitModuleCompleted = null;
 let emitModuleError = null;
+let emitLevelUp = null;
 
 /**
  * Ustawia funkcje emitowania powiadomień (wywoływane z serwera)
  */
-export function setNotificationEmitters(startedFn, completedFn, errorFn) {
+export function setNotificationEmitters(startedFn, completedFn, errorFn, levelUpFn = null) {
   emitModuleStarted = startedFn;
   emitModuleCompleted = completedFn;
   emitModuleError = errorFn;
+  emitLevelUp = levelUpFn;
   logger.info('📢 Emittery powiadomień skonfigurowane');
 }
 
@@ -344,8 +346,20 @@ class SimpleScheduler {
         throw new Error('Nie udało się zalogować');
       }
 
+      // Pobierz stary poziom z cache (do porównania)
+      const oldCache = getGameStatusCache(task.accountId);
+      const oldLevel = oldCache?.playerInfo?.level || 0;
+
       // Pobierz informacje o graczu (premium, pieniądze)
       const playerInfo = await auth.getPlayerInfo();
+      
+      // Sprawdź czy gracz awansował
+      if (playerInfo.level > oldLevel && oldLevel > 0) {
+        logger.info(`🎉 ${account.email} awansował z poziomu ${oldLevel} na ${playerInfo.level}!`);
+        if (emitLevelUp) {
+          emitLevelUp(task.accountId, account.email, oldLevel, playerInfo.level);
+        }
+      }
       
       // Pobierz informacje o odblokowaniu funkcji (farmy, stragany, tartak)
       const unlockedFeatures = await auth.getUnlockedFeatures();

@@ -40,6 +40,15 @@
           <p class="option-hint">Gdy wyłączony, przeglądarka będzie widoczna</p>
         </div>
       </div>
+      
+      <div class="sidebar-section">
+        <h4>📢 Discord</h4>
+        <div class="settings-box">
+          <button onclick="openDiscordSettings()" class="btn btn-small btn-discord">
+            ⚙️ Ustawienia Discord
+          </button>
+        </div>
+      </div>
     </aside>
     
     <main class="main-content">
@@ -425,6 +434,65 @@
         <div class="form-actions">
           <button type="button" onclick="closeModal()" class="btn btn-secondary">Anuluj</button>
           <button type="submit" class="btn btn-primary">Dodaj konto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Modal ustawień Discord -->
+  <div id="discordModal" class="modal hidden">
+    <div class="modal-content modal-wide">
+      <h3>📢 Ustawienia Discord</h3>
+      <form id="discordForm" onsubmit="saveDiscordSettings(event)">
+        <div class="form-group">
+          <label for="webhookUrl">URL Webhooka Discord:</label>
+          <input type="url" id="webhookUrl" placeholder="https://discord.com/api/webhooks/...">
+          <p class="option-hint">Utwórz webhook w ustawieniach kanału Discord i wklej tutaj URL</p>
+        </div>
+        
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="discordEnabled">
+            <span>Włącz powiadomienia Discord</span>
+          </label>
+        </div>
+        
+        <h4>Rodzaje powiadomień:</h4>
+        <div class="notification-options">
+          <label class="checkbox-label">
+            <input type="checkbox" id="notifyLevelUp" checked>
+            <span>🎉 Awans na nowy poziom</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="notifyModuleComplete">
+            <span>✅ Zakończenie modułu</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="notifyModuleError" checked>
+            <span>❌ Błąd modułu</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="notifyHarvest">
+            <span>🌾 Zebrane plony (szczegóły)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="notifyMoney">
+            <span>💰 Znalezione pieniądze</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="notifySchedulerStart">
+            <span>▶️ Uruchomienie schedulera</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="notifySchedulerStop">
+            <span>⏹️ Zatrzymanie schedulera</span>
+          </label>
+        </div>
+        
+        <div class="form-actions">
+          <button type="button" onclick="testDiscordWebhook()" class="btn btn-info">🧪 Wyślij test</button>
+          <button type="button" onclick="closeDiscordModal()" class="btn btn-secondary">Anuluj</button>
+          <button type="submit" class="btn btn-primary">💾 Zapisz</button>
         </div>
       </form>
     </div>

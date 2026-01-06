@@ -944,7 +944,7 @@ async function loadGameStatusFromCache() {
     // Pobierz status z cache bazy danych
     const data = await api('GET', `/api/accounts/${selectedAccountId}/game-status-cache`);
     
-    if (data && data.fieldsStatus) {
+    if (data && data.updatedAt) {
       // Przelicz timery
       const fetchedAt = new Date(data.updatedAt).getTime();
       const adjustedData = adjustTimersFromCache(data, fetchedAt);
@@ -956,30 +956,17 @@ async function loadGameStatusFromCache() {
       
       // Uruchom live timery
       startLiveTimers();
+      
+      console.log('Cache DB załadowany:', data.updatedAt);
       return; // Sukces - nie sprawdzaj localStorage
     }
   } catch (error) {
     console.log('Brak cache statusu gry w DB:', error.message);
   }
   
-  // Fallback: sprawdź localStorage
-  try {
-    const cached = getStatusCache(selectedAccountId);
-    if (cached && cached.data) {
-      const adjustedData = adjustTimersFromCache(cached.data, cached.fetchedAt);
-      displayGameStatus(adjustedData);
-      const cacheAge = Math.round((Date.now() - cached.fetchedAt) / 60000);
-      document.getElementById('statusFetchTime').textContent = 
-        `(z localStorage, ${cacheAge} min temu)`;
-      startLiveTimers();
-    } else {
-      // Brak żadnego cache
-      document.getElementById('statusFetchTime').textContent = 
-        '(kliknij "Odśwież status" aby pobrać dane)';
-    }
-  } catch (e) {
-    console.error('Błąd ładowania cache z localStorage:', e);
-  }
+  // Brak cache w DB - wyświetl komunikat
+  document.getElementById('statusFetchTime').textContent = 
+    '(kliknij "Odśwież status" aby pobrać dane)';
 }
 
 // Pobiera status tylko z lokalnego cache (szybkie, bez wchodzenia do gry)
@@ -2026,6 +2013,100 @@ async function toggleHeadlessMode() {
   } catch (error) {
     showToast('Błąd zapisu ustawień', 'error');
     headlessToggle.checked = !enabled; // Przywróć poprzednią wartość
+  }
+}
+
+// ============ DISCORD ============
+
+/**
+ * Otwiera modal ustawień Discord
+ */
+async function openDiscordSettings() {
+  const modal = document.getElementById('discordModal');
+  modal.classList.remove('hidden');
+  
+  try {
+    const data = await api('GET', '/api/discord/settings');
+    
+    // Wypełnij formularz
+    document.getElementById('webhookUrl').value = data.webhookUrl || '';
+    document.getElementById('discordEnabled').checked = data.settings?.enabled || false;
+    document.getElementById('notifyLevelUp').checked = data.settings?.notifyLevelUp !== false;
+    document.getElementById('notifyModuleComplete').checked = data.settings?.notifyModuleComplete || false;
+    document.getElementById('notifyModuleError').checked = data.settings?.notifyModuleError !== false;
+    document.getElementById('notifyHarvest').checked = data.settings?.notifyHarvest || false;
+    document.getElementById('notifyMoney').checked = data.settings?.notifyMoney || false;
+    document.getElementById('notifySchedulerStart').checked = data.settings?.notifySchedulerStart || false;
+    document.getElementById('notifySchedulerStop').checked = data.settings?.notifySchedulerStop || false;
+  } catch (error) {
+    console.error('Błąd ładowania ustawień Discord:', error);
+  }
+}
+
+/**
+ * Zamyka modal ustawień Discord
+ */
+function closeDiscordModal() {
+  document.getElementById('discordModal').classList.add('hidden');
+}
+
+/**
+ * Zapisuje ustawienia Discord
+ */
+async function saveDiscordSettings(event) {
+  event.preventDefault();
+  
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+  const settings = {
+    enabled: document.getElementById('discordEnabled').checked,
+    notifyLevelUp: document.getElementById('notifyLevelUp').checked,
+    notifyModuleComplete: document.getElementById('notifyModuleComplete').checked,
+    notifyModuleError: document.getElementById('notifyModuleError').checked,
+    notifyHarvest: document.getElementById('notifyHarvest').checked,
+    notifyMoney: document.getElementById('notifyMoney').checked,
+    notifySchedulerStart: document.getElementById('notifySchedulerStart').checked,
+    notifySchedulerStop: document.getElementById('notifySchedulerStop').checked,
+  };
+  
+  try {
+    await api('POST', '/api/discord/settings', { webhookUrl, settings });
+    showToast('Ustawienia Discord zapisane!', 'success');
+    closeDiscordModal();
+  } catch (error) {
+    showToast('Błąd zapisu ustawień: ' + error.message, 'error');
+  }
+}
+
+/**
+ * Wysyła testowe powiadomienie Discord
+ */
+async function testDiscordWebhook() {
+  // Najpierw zapisz aktualne ustawienia
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+  const enabled = document.getElementById('discordEnabled').checked;
+  
+  if (!webhookUrl) {
+    showToast('Wprowadź URL webhooka Discord', 'error');
+    return;
+  }
+  
+  if (!enabled) {
+    showToast('Włącz powiadomienia Discord aby wysłać test', 'error');
+    return;
+  }
+  
+  try {
+    // Zapisz ustawienia przed testem
+    await api('POST', '/api/discord/settings', { 
+      webhookUrl, 
+      settings: { enabled: true } 
+    });
+    
+    // Wyślij test
+    const result = await api('POST', '/api/discord/test');
+    showToast(result.message || 'Test wysłany!', 'success');
+  } catch (error) {
+    showToast('Błąd testu: ' + error.message, 'error');
   }
 }
 

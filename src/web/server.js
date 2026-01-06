@@ -887,6 +887,61 @@ app.post('/api/settings', requireAuth, (req, res) => {
   }
 });
 
+// ============ DISCORD ============
+
+import { 
+  getDiscordWebhookUrl, 
+  setDiscordWebhookUrl, 
+  getDiscordSettings, 
+  setDiscordSettings,
+  sendTestNotification 
+} from '../discord.js';
+
+// Pobierz ustawienia Discord
+app.get('/api/discord/settings', requireAuth, (req, res) => {
+  try {
+    res.json({
+      webhookUrl: getDiscordWebhookUrl(),
+      settings: getDiscordSettings()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Zapisz ustawienia Discord
+app.post('/api/discord/settings', requireAuth, (req, res) => {
+  try {
+    const { webhookUrl, settings } = req.body;
+    
+    if (webhookUrl !== undefined) {
+      setDiscordWebhookUrl(webhookUrl);
+    }
+    
+    if (settings) {
+      setDiscordSettings(settings);
+    }
+    
+    res.json({ success: true, message: 'Ustawienia Discord zapisane' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Wyślij testowe powiadomienie
+app.post('/api/discord/test', requireAuth, async (req, res) => {
+  try {
+    const success = await sendTestNotification();
+    if (success) {
+      res.json({ success: true, message: 'Powiadomienie testowe wysłane!' });
+    } else {
+      res.status(400).json({ error: 'Nie udało się wysłać powiadomienia. Sprawdź URL webhooka i czy powiadomienia są włączone.' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ WEBSOCKET ============
 
 io.on('connection', (socket) => {
@@ -917,19 +972,51 @@ export function emitModuleStarted(accountId, accountEmail, module, message = nul
 }
 
 // Funkcja do wysyłania powiadomień o zakończeniu modułu
-export function emitModuleCompleted(accountId, accountEmail, module, results = null) {
+export async function emitModuleCompleted(accountId, accountEmail, module, results = null) {
   const data = { accountId, accountEmail, module, results, timestamp: new Date().toISOString() };
   io.to(`account_${accountId}`).emit('module_completed', data);
   io.to('global').emit('module_completed', data);
   logger.info(`✅ Powiadomienie: ${accountEmail} - moduł ${module} zakończony`);
+  
+  // Wyślij powiadomienie Discord
+  try {
+    const { notifyModuleComplete } = await import('../discord.js');
+    await notifyModuleComplete(accountEmail, module, results);
+  } catch (e) {
+    logger.debug(`Discord notify error: ${e.message}`);
+  }
 }
 
 // Funkcja do wysyłania powiadomień o błędzie modułu
-export function emitModuleError(accountId, accountEmail, module, error) {
+export async function emitModuleError(accountId, accountEmail, module, error) {
   const data = { accountId, accountEmail, module, error, timestamp: new Date().toISOString() };
   io.to(`account_${accountId}`).emit('module_error', data);
   io.to('global').emit('module_error', data);
   logger.error(`❌ Powiadomienie: ${accountEmail} - błąd ${module}: ${error}`);
+  
+  // Wyślij powiadomienie Discord
+  try {
+    const { notifyModuleError } = await import('../discord.js');
+    await notifyModuleError(accountEmail, module, error);
+  } catch (e) {
+    logger.debug(`Discord notify error: ${e.message}`);
+  }
+}
+
+// Funkcja do wysyłania powiadomienia o awansie
+export async function emitLevelUp(accountId, accountEmail, oldLevel, newLevel) {
+  const data = { accountId, accountEmail, oldLevel, newLevel, timestamp: new Date().toISOString() };
+  io.to(`account_${accountId}`).emit('level_up', data);
+  io.to('global').emit('level_up', data);
+  logger.info(`🎉 Powiadomienie: ${accountEmail} - awans z poziomu ${oldLevel} na ${newLevel}!`);
+  
+  // Wyślij powiadomienie Discord
+  try {
+    const { notifyLevelUp } = await import('../discord.js');
+    await notifyLevelUp(accountEmail, oldLevel, newLevel);
+  } catch (e) {
+    logger.debug(`Discord notify error: ${e.message}`);
+  }
 }
 
 // ============ START SERWERA ============
@@ -939,7 +1026,7 @@ export async function startServer() {
   initDatabase();
   
   // Skonfiguruj emittery powiadomień dla schedulera
-  setNotificationEmitters(emitModuleStarted, emitModuleCompleted, emitModuleError);
+  setNotificationEmitters(emitModuleStarted, emitModuleCompleted, emitModuleError, emitLevelUp);
   
   // Uruchom scheduler
   scheduler.start();
