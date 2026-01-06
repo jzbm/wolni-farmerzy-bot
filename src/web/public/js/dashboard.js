@@ -2110,5 +2110,41 @@ async function testDiscordWebhook() {
   }
 }
 
+// ============ DARK MODE ============
+
+/**
+ * Inicjalizuje dark mode na podstawie zapisanych preferencji
+ */
+function initDarkMode() {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  const toggle = document.getElementById('darkModeToggle');
+  
+  if (savedTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    if (toggle) toggle.checked = true;
+  }
+}
+
+/**
+ * Przełącza dark mode
+ */
+function toggleDarkMode() {
+  const toggle = document.getElementById('darkModeToggle');
+  const isDark = toggle.checked;
+  
+  if (isDark) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('theme', 'dark');
+    showToast('Dark mode włączony 🌙', 'success');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('theme', 'light');
+    showToast('Light mode włączony ☀️', 'success');
+  }
+}
+
+// Inicjalizuj dark mode od razu (przed DOMContentLoaded)
+initDarkMode();
+
 // Załaduj ustawienia przy starcie
 document.addEventListener('DOMContentLoaded', loadAppSettings);
